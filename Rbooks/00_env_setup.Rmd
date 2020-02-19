@@ -1,0 +1,43 @@
+---
+title: "Envirnment setup"
+output: html_notebook
+---
+
+This notebook creates schemas in a database required for the processes to run.
+
+```{r}
+create_schema_if_required <- function(con, name) {
+    dbExecute(con, paste0("IF NOT EXISTS ( SELECT  schema_name FROM    information_schema.schemata WHERE   schema_name = '",name,"' ) BEGIN EXEC sp_executesql N'CREATE SCHEMA ",name,"'  END") )
+}
+
+source("../scripts/unz_common.R")
+go_analysis_con <- connect_to_GO_analysis_database()
+create_schema_if_required(go_analysis_con, 'lng')
+create_schema_if_required(go_analysis_con, 'tab')
+create_schema_if_required(go_analysis_con, 'wide')
+
+```
+
+Check for folders and create some if required? Maybe check for files?
+
+# Check if the required folders are there
+
+If any of them are missing, there will be missing files
+```{r}
+dir.exists("../scripts")
+dir.exists("../program_costs")
+dir.exists('../input_data')
+dir.exists("../metadata")
+```
+
+
+```{r}
+if(!dir.exists('../working_outputs')) {
+  dir.create('../working_outputs')
+}
+if(!dir.exists('../datasets')) {
+  dir.create('../datasets')
+}
+```
+
+

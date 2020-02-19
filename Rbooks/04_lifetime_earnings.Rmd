@@ -1,0 +1,300 @@
+---
+title: "Lifetime income analysis"
+output: html_notebook
+---
+
+
+The purpose of this is to produce a sound income
+
+This produces the following outputs
+- 1a simple lifetime earnings
+- 1b offset lifetime earnings
+- 2a lifetime earnings above school leaver
+- 3a discounted lifetime earnings
+- 3b discounted lifetime earnings above a school leaver
+- 4 better off than a school leaver
+- 5a tax paid over lifetime
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+library(data.table)
+library(dbplyr)
+library(DBI)
+source("../scripts/unz_common.R")
+source("../scripts/impute_income.R")
+source("../scripts/compute_age_standard_income.R")
+source("../scripts/cross_tabulation.R")
+```
+
+## define functions to output data 
+```{r}
+# for outputting a table into for all study levels
+# requires: level_code, Field_Text
+# accepts long format
+# chainable
+output_field_levels_all <- function(.data, con, value_var, table_name) {
+    tabulated_income_b <- .data %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = value_var)
+    print(tabulated_income_b)
+    dbWriteTable(con, Id(schema = "tab", table = table_name), tabulated_income_b, overwrite = TRUE)
+    return(.data)
+}
+
+# for outputting a table into for all study levels
+# requires: level_code, Field_Text
+# accepts long format
+# chainable
+output_field_levels_l4_l10 <- function(.data, con, value_var, table_name) {
+    tabulated_income_b <- .data %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = value_var) %>%
+        select(Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
+    print(tabulated_income_b)
+    dbWriteTable(con, Id(schema = "tab", table = table_name), tabulated_income_b, overwrite = TRUE)
+    return(.data)
+}
+```
+
+## Connect to analysis database
+
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+## Load Data
+```{r}
+employed_code = '2'
+yearly_gross_income_long <- dbGetQuery(go_analysis_con, paste0("SELECT *
+  FROM [lng].[cen_yearly_gross_income]
+  where employed_code = ", employed_code))
+head(yearly_gross_income_long)
+```
+
+### Load number of people
+
+The yearly income dataset does not contain people counts, so it is being obtained from a different table
+```{r}
+total_people_counts <- dbGetQuery(go_analysis_con, paste0("SELECT
+      [level_code]
+      ,[field], field_code
+,[people_count2]
+  FROM [GO_Analysis_Data].[lng].[cen_annual_avg_income]
+  where age = 'Total' and people_count > 0 and set_standard = 1 and employed_code = ", employed_code)) %>% rename(people_count_all_ages = people_count2) %>% mutate(Field_Text = paste(field_code, field)) %>%
+    select(-c(field, field_code))
+head(total_people_counts)
+```
+
+## Check what level codes are in the dataset
+```{r}
+unique(yearly_gross_income_long[c("level", "level_code")])
+```
+
+
+# Calculate a simple lifetime income
+
+Simple in that it does not remove fees from the total income
+
+```{r}
+# simple gross lifetime incomes
+simplistic_lifetime_earnings <- yearly_gross_income_long %>% filter(age >= 18, level != "Overseas Secondary School Qualification") %>%
+    group_by(field, level_code) %>%
+    summarise(simple_lifetime_income = sum(gross_income)) %>% 
+    append_narrow_field_of_study_code(field_var = "field") %>% 
+    mutate(Field_Text = paste(field_code, field))
+head(simplistic_lifetime_earnings)
+simplistic_lifetime_earnings %>% 
+    output_field_levels_all(con = go_analysis_con, value_var = "simple_lifetime_income", table_name = paste0("cen_lifetime_earnings_a", employed_code))
+```
+
+
+
+# ******************************************************* 
+# This is about where everything gets complex 
+# *******************************************************
+
+
+
+# Get fee estimates
+
+```{r}
+fees_and_funding <- read.csv("../datasets/fees_durations_SAC.csv") %>% mutate(
+  level_code = formatC(level_code, width = 2, flag = "0"),
+  field_code = formatC(field_code, width = 4, flag = "0")
+  
+)
+head(fees_and_funding)
+```
+
+
+```{r}
+income_with_fees <- yearly_gross_income_long %>%
+    left_join(fees_and_funding, by=c("field_code", "level_code"))
+head(income_with_fees)
+```
+
+
+
+```{r}
+tax_calculated <- income_with_fees %>% group_by(field, level) %>% arrange(age) %>% 
+    mutate(
+        offset_income = ifelse(is.na(duration_whole_yr), gross_income, ifelse(age < 17 + duration_whole_yr, 0, gross_income)),
+        loan_repayments = ifelse(
+            cumsum(offset_income * 0.12) - (offset_income * 0.12) >= loan_at_graduation, 
+            0,
+            ifelse(cumsum(offset_income * 0.12) >= loan_at_graduation,
+                   loan_at_graduation - (cumsum(offset_income * 0.12) - (offset_income * 0.12)),
+                   (offset_income * 0.12)
+                   )
+        )
+        
+    ) %>% 
+    mutate(
+        current_loan = loan_at_graduation - cumsum(loan_repayments),
+        tax = ifelse(
+            offset_income <= 14000, 
+            offset_income * 0.105,
+            ifelse(
+                offset_income <= 28000, 
+                1470 + (offset_income - 14000) * 0.175,
+                ifelse(
+                    offset_income <= 70000,
+                    3920 + (offset_income - 28000) * 0.30,
+                    16520 + (offset_income - 70000) * 0.33
+                )
+            )
+        )
+    )
+head(tax_calculated)
+```
+
+
+```{r}
+baseline_income <- tax_calculated %>% 
+    filter(field_code == "0000", level_code == "00") %>%
+    ungroup() %>%
+    select(age, gross_income, tax) %>%
+    rename(baseline_income = gross_income, baseline_tax = tax)
+head(baseline_income)
+```
+
+```{r}
+components_calculated <- tax_calculated %>% left_join (baseline_income, by="age") %>%
+    mutate(
+        above_school_leaver = offset_income - baseline_income,
+        tax_paid_above_school_leaver = tax - baseline_tax
+    )
+
+head(components_calculated)
+```
+
+
+
+# Calculate NPV
+```{r}
+i <- 0.03
+v <- 1 / (1+i)
+print(c(i,v))
+npv_calculated <- components_calculated %>% 
+    mutate(
+        t = (age - 17),
+        discounted_income = offset_income * (v ^ t),
+        npv = cumsum(discounted_income),
+        discounted_compared_school_leaver = above_school_leaver  * (v ^ t),
+        npv_over_school_leaver = cumsum(discounted_compared_school_leaver),
+        
+        # SAC funding:
+        sac_fund_for_yr_temp = sac_funding * 1,
+        sac_fund_for_yr = 
+            ifelse(
+                cumsum(sac_fund_for_yr_temp) > total_funding, 
+                ifelse(
+                    cumsum(sac_fund_for_yr_temp) - sac_fund_for_yr_temp > total_funding,
+                    0,
+                    total_funding - (cumsum(sac_fund_for_yr_temp) - sac_fund_for_yr_temp)
+                ),
+                sac_fund_for_yr_temp
+            ),
+        tax_paid_above_school_leaver_m_sac = tax_paid_above_school_leaver - sac_fund_for_yr,
+        
+        discounted_income_tax_paid_above_school_leaver_m_sac = tax_paid_above_school_leaver_m_sac * (v ^ t),
+        npv_tax_over_school_leaver = cumsum(discounted_income_tax_paid_above_school_leaver_m_sac)
+    )
+head(npv_calculated)
+```
+
+
+# Lifetime income
+```{r}
+summarised_lifetime_income <- npv_calculated %>% mutate(Field_Text = paste(field_code, field)) %>% 
+    group_by(Field_Text, level_code) %>%
+    summarise(
+        lifetime_above_school_leaver = sum(above_school_leaver), 
+        discounted_lifetime_income = sum(discounted_income), 
+        discounted_lifetime_above_school_leaver = sum(discounted_compared_school_leaver), 
+        offset_lifetime_income = sum(offset_income),
+        lifetime_tax = sum(tax),
+        tax_above_school_leaver = sum(tax_paid_above_school_leaver),
+        
+        npv_tax_over_school_leaver = sum(discounted_income_tax_paid_above_school_leaver_m_sac)
+    ) %>% left_join (total_people_counts) %>% filter (people_count_all_ages > 25)
+head(summarised_lifetime_income)
+```
+
+
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = paste0("cen_lifetime_income", employed_code)), 
+             summarised_lifetime_income %>% filter(
+                ! (is.na(lifetime_above_school_leaver) & is.na(discounted_lifetime_income) & is.na(discounted_lifetime_above_school_leaver) & is.na(offset_lifetime_income) & is.na(lifetime_tax) & is.na(tax_above_school_leaver))
+             ), 
+             overwrite = TRUE)
+```
+
+```{r}
+tabulated_income_b <- summarised_lifetime_income %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "lifetime_above_school_leaver")
+print(tabulated_income_b)
+dbWriteTable(go_analysis_con, Id(schema = "tab", table = paste0("cen_lifetime_earnings_above_school_leaver", employed_code)), tabulated_income_b, overwrite = TRUE)
+```
+
+```{r}
+summarised_lifetime_income %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "lifetime_above_school_leaver", paste0("cen_lifetime_earnings_above_school_leaver", employed_code)) %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "discounted_lifetime_income", paste0("cen_lifetime_discounted_earnings", employed_code)) %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "discounted_lifetime_above_school_leaver", paste0("cen_lifetime_discounted_earnings_above_school_leaver", employed_code)) %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "offset_lifetime_income", paste0("cen_lifetime_offset", employed_code)) %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "lifetime_tax", paste0("cen_lifetime_tax", employed_code)) %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "tax_above_school_leaver", paste0("cen_tax_above_school_leaver", employed_code)) %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "npv_tax_over_school_leaver", paste0("cen_npv_tax_over_school_leaver", employed_code)) %>%
+    head()
+```
+
+```{r}
+age_when_better_off <- npv_calculated %>% mutate(
+    better_off = ifelse(lag(npv_over_school_leaver) <= 0 & npv_over_school_leaver > 0, TRUE, FALSE),
+    Field_Text = paste(field_code, field)
+) %>% group_by(Field_Text, level_code) %>%
+arrange(Field_Text, level_code, desc(better_off), age) %>%
+mutate(
+    fl_index = row_number()
+) %>% filter(!is.na(better_off), fl_index == 1) %>% ungroup() %>%
+    select(Field_Text, level_code, age, better_off) %>%
+    mutate(age = ifelse(!better_off, 99, age)) %>%
+    arrange(Field_Text, level_code)
+
+head(age_when_better_off)
+```
+
+```{r}
+tabulated_age_better_off <- age_when_better_off %>% 
+    pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age") %>%
+    select(Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
+
+print(tabulated_age_better_off)
+dbWriteTable(go_analysis_con, Id(schema = "tab", table = paste0("cen_age_better_off", employed_code)), tabulated_age_better_off, overwrite = TRUE)
+```
+
+
+
+```{r}
+# do some checks
+npv_calculated %>% filter(field_code == "0201", level_code == "07") %>%
+    select(age, gross_income)
+```

@@ -1,0 +1,109 @@
+---
+title: "Income for 30 to 39 year old graduates"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+library(data.table)
+library(DBI)
+source("../scripts/unz_common.R")
+source("../scripts/cross_tabulation.R")
+```
+
+## A connection to an analysis database
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+
+```{r}
+data <- dbGetQuery(go_analysis_con, "SELECT *
+  FROM [lng].[cen_annual_avg_income]
+  where set_standard = 1 and employed_code = 1")
+head(data)
+```
+
+
+# Work on 30 - 39 year old incomes
+
+```{r}
+get_30_39_income_summary_set <- function (.data) {
+    temp <- .data %>% 
+        filter(age %in% c("30-34 years", "35-39 years")) %>%
+        mutate(
+            Field_Text = paste(field_code, field)
+            , level_code = ifelse(level_code == '11', '03', level_code)
+        ) %>% 
+        group_by(level_code, Field_Text) %>%
+        summarise(mean_income = round2(mean(mean_income, na.rm = TRUE), -2), people_count = sum(people_count, na.rm = TRUE)) %>%
+        mutate(
+            mean_income = ifelse(is.na(mean_income), NA, mean_income)
+        )
+    return(temp)
+}
+tabulate_and_save_income_set <- function (.data, income_table_name, counts_table_name) {
+    tabulated_income <- .data %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "mean_income")
+    print(tabulated_income)
+    tabulated_counts <- .data %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "people_count")
+    print(tabulated_counts)
+     dbWriteTable(go_analysis_con, Id(schema = "tab", table = income_table_name), tabulated_income, overwrite = TRUE)
+    dbWriteTable(go_analysis_con, Id(schema = "tab", table = counts_table_name), tabulated_counts, overwrite = TRUE)
+}
+```
+
+```{r}
+income_data <- data %>% select(-c(mean_income, people_count)) %>% 
+    rename(mean_income = mean_income2, people_count = people_count2) %>% filter(people_count > 3) %>% 
+    get_30_39_income_summary_set() %>% filter(people_count > 20)
+head(income_data)
+```
+
+
+```{r}
+ dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_3_avg_income_30_39"), income_data, overwrite = TRUE)
+```
+
+```{r}
+tabulate_and_save_income_set(income_data, "annual_avg_3_income_30_39", "annual_avg_3_income_30_39_people_counts")
+```
+
+
+# all employed
+
+
+```{r}
+all_income_data <- dbGetQuery(go_analysis_con, "SELECT *
+  FROM [lng].[cen_annual_avg_income]
+  where set_standard = 1 and employed_code = 2") %>% select(-c(mean_income, people_count)) %>% 
+    rename(mean_income = mean_income2, people_count = people_count2) %>% filter(people_count > 3)  %>%
+    get_30_39_income_summary_set() %>% filter(people_count > 20) 
+head(all_income_data)
+```
+
+
+```{r}
+ dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_3_income_30_39_all"), all_income_data, overwrite = TRUE)
+```
+
+```{r}
+tabulate_and_save_income_set(all_income_data, "annual_avg_3_income_30_39_all", "annual_avg_3_income_30_39_all_people_counts")
+```
+
+```{r}
+res_income_data <- dbGetQuery(go_analysis_con, "SELECT *
+  FROM [lng].[cen_annual_avg_income2]
+  where set_standard = 1 and employed_code = 4") %>% get_30_39_income_summary_set()
+head(res_income_data)
+```
+
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income_30_39_res"), res_income_data, overwrite = TRUE)
+```
+
+```{r}
+tabulate_and_save_income_set(res_income_data, "annual_avg_income_30_39_res", "annual_avg_income_30_39_res_people_counts")
+```

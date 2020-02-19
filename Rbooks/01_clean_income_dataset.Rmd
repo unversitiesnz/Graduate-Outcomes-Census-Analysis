@@ -1,0 +1,158 @@
+---
+title: "Clean income data"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*.
+
+The dataset produced by stats nz is not in a very easy to handle format, with spaces in everything, this notebook produces a few easier to use datasets.
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+library(DBI)
+source("../scripts/unz_common.R")
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+data <- read_excel("../input_data/JOB-10148-1 - Field of Study income.xlsx", na = "NA", skip=7)
+head(data)
+```
+
+There is a row at the end of the file which is not data, it needs to be removed.
+```{r}
+# remove non data row at end
+data <- data[!is.na(data$`Mean Income ($)`),]
+tail(data)
+```
+
+Adding code variables for field and study level
+```{r}
+data2 <- data %>% 
+    append_narrow_field_of_study_code(field_var = "Post School Qualification Field of Study", code_var = "field_code") %>%
+    append_study_level_code(level_var = "Highest Qualification", code_var = "level_code")
+head(data2)
+```
+
+Remove some data which is never used, and define standard data used. The helps prevent double counts.
+```{r}
+data4 <- data2 %>%
+    filter(
+        # remove some qualification classifications:
+        !`Highest Qualification` %in% c("Total stated"),
+        !`Post School Qualification Field of Study` %in% c("Total stated", "Not Stated")
+    ) %>%
+    mutate(
+        set_total = `Highest Qualification` == "Total" | `Post School Qualification Field of Study` == "Total",
+        set_standard = `Highest Qualification` %in% 
+            c('No Qualification', 'Level 1 Certificate', 'Level 2 Certificate', 'Level 3 Certificate', 
+              'Level 4 Certificate', 'Total 5 & 6 Diploma', 'Bachelor Degree and Level 7 Qualification', 
+              'Post-graduate and Honours Degrees', 'Masters Degree', 'Doctorate Degree', 
+              'Overseas Secondary School Qualification') & !set_total,
+        
+    ) %>% mutate(
+        employed_code = ifelse(`Work Status` == 'Employed full-time', 1, ifelse(`Work Status` == 'Total employed', 2, 3))
+    )
+
+head(data4)
+```
+
+Rename columns so that there are not spaces in the column names.
+```{r}
+cen_income_bands <- data4 %>%
+    rename(
+        level = "Highest Qualification", 
+        field = "Post School Qualification Field of Study", 
+        people_count = "Total", 
+        mean_income = "Mean Income ($)",
+        median_income = "Median Income ($)",
+        age = "Age Group",
+        work_status = `Work Status`
+    ) %>% select(
+        set_total, set_standard, employed_code, work_status, level_code, level, field_code, field, age, everything() 
+    )
+
+cen_income_bands
+```
+
+
+A connection to an analysis database
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+
+Write the table before any transformations are done.
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_income_bands"), cen_income_bands, overwrite = TRUE)
+```
+
+
+
+```{r}
+cen_annual_avg_income <- cen_income_bands %>% mutate(
+    restricted_people_count = `$25,001-$30,000` + `$30,001-$35,000` + `$35,001-$40,000` + 
+                              `$40,001-$50,000` + `$50,001-$60,000` + `$70,001-$100,000` +
+                              `$100,001-$150,000` + `$150,001 or More`,
+    restricted_total_income = `$25,001-$30,000` * 27500 + `$30,001-$35,000` * 32500 + `$35,001-$40,000` * 37500 + 
+                              `$40,001-$50,000` * 45000 + `$50,001-$60,000` * 55000 + `$70,001-$100,000` * 85000 +
+                              `$100,001-$150,000` * 125000 + `$150,001 or More` * 150000,
+    people_count2 = `$1-$5,000` + `$5,001-$10,000` +
+                              `$10,001-$15,000` + `$15,001-$20,000` + `$20,001-$25,000` +
+                              `$25,001-$30,000` + `$30,001-$35,000` + `$35,001-$40,000` + 
+                              `$40,001-$50,000` + `$50,001-$60,000` + `$70,001-$100,000` +
+                              `$100,001-$150,000` + `$150,001 or More`,
+    total_above_zero_income = `$1-$5,000` * 2500 + `$5,001-$10,000` * 7500 +
+                              `$10,001-$15,000` * 12500 + `$15,001-$20,000` * 17500 + `$20,001-$25,000` * 22500 +
+                              `$25,001-$30,000` * 27500 + `$30,001-$35,000` * 32500 + `$35,001-$40,000` * 37500 + 
+                              `$40,001-$50,000` * 45000 + `$50,001-$60,000` * 55000 + `$70,001-$100,000` * 85000 +
+                              `$100,001-$150,000` * 125000 + `$150,001 or More` * 200000
+) %>% mutate(
+        restricted_mean_income = restricted_total_income / restricted_people_count
+        , mean_income2 = total_above_zero_income / people_count2
+    ) %>% 
+    select(set_total, set_standard, employed_code, work_status, level_code, level, field_code, field, age, people_count, restricted_people_count, people_count2, mean_income2, mean_income, median_income, restricted_mean_income) %>%
+    mutate(
+        restricted_mean_income = round2(restricted_mean_income, -2),
+        mean_income2 = round2(mean_income2, -2),
+        mean_income = ifelse(mean_income == 0, NA, mean_income),
+        median_income = ifelse(median_income == 0, NA, median_income),
+        restricted_mean_income = ifelse(restricted_mean_income == 0, NA, restricted_mean_income),
+        mean_income2 = ifelse(mean_income2 == 0, NA, mean_income2)
+    
+    )
+head(cen_annual_avg_income)
+```
+
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income"), cen_annual_avg_income, overwrite = TRUE)
+```
+
+
+
+NOT SURE IF THESE SECTIONs ARE NEEDED
+```{r}
+cen_annual_avg_income2 <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income"))
+unique(cen_annual_avg_income2$level_code)
+temp <- cen_annual_avg_income2 %>% filter(employed_code == 1) %>%
+    select(-c(people_count, mean_income)) %>%
+    rename(people_count = restricted_people_count, mean_income = restricted_mean_income) %>%
+    mutate(median_income = NA, employed_code = 4, work_status = "Employed full-time (income restricted)")
+head(temp)
+```
+
+
+```{r}
+cen_annual_avg_income2_a <- rbind(cen_annual_avg_income2 %>% select(-c(restricted_people_count, restricted_mean_income)), temp)
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income2"), cen_annual_avg_income2_a, overwrite = TRUE)
+```
+

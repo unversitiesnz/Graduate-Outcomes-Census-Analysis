@@ -1,0 +1,208 @@
+---
+title: "Income imputation"
+output: html_notebook
+---
+This notebook uses the cen_annual_avg_income dataset and produces a yearly income dataset for the working life of a graduate.
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+library(DBI)
+source("../scripts/unz_common.R")
+```
+
+## A connection to an analysis database
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+
+```{r}
+data <- dbGetQuery(go_analysis_con, "SELECT *
+  FROM [lng].[cen_annual_avg_income]
+  where set_standard = 1") %>% select(-c(set_total, set_standard, work_status, restricted_people_count, restricted_mean_income, mean_income, median_income, people_count)) %>%
+    rename(people_count = people_count2, mean_income = mean_income2)
+head(data)
+```
+
+# Decide if we should impute for each given field/level group?
+## count the missing -> not really used?
+```{r}
+missing_count <- data %>% group_by(employed_code, field, level) %>%
+    summarise(missing_count = sum(is.na(mean_income)))
+head(missing_count)
+```
+
+## convert income data to wide with age as columns:
+The age columns must be in sequnce for this to work, the index of the age columns are manually defined and will result in highly undesirable behavour if they move.
+```{r}
+age_cols <- 6:16
+
+    wide_form <- data %>% select(-c("people_count")) %>% spread(age, mean_income)
+    #print(wide_form)
+    print(colnames(wide_form))
+    colnames(wide_form)[age_cols] <- c('age_15_19', 'age_20_24', 'age_25_29', 'age_30_34', 'age_35_39', 'age_40_44', 'age_45_49', 'age_50_54', 'age_55_59', 'age_60_64', 'age_65_')
+    print(colnames(wide_form))
+    head(wide_form)
+```
+
+## make the call on what can be imputed:
+```{r}
+should_impute <- wide_form %>% left_join(missing_count, by=c("employed_code","field", "level")) %>% 
+    mutate(
+           can_impute = !
+            (# Can't impute if there is a run of four missing between 20 and 54
+                (is.na(age_20_24) & is.na(age_25_29) & is.na(age_30_34) & is.na(age_35_39) & is.na(age_40_44)) |
+                (is.na(age_25_29) & is.na(age_30_34) & is.na(age_35_39) & is.na(age_40_44)) |
+                (is.na(age_30_34) & is.na(age_35_39) & is.na(age_40_44) & is.na(age_45_49)) |
+                (is.na(age_35_39) & is.na(age_40_44) & is.na(age_45_49) & is.na(age_50_54)) |
+                # Can't impute if there is a run of three missing between 50 and 65
+                (is.na(age_50_54) & is.na(age_55_59) & is.na(age_60_64)) |
+                (is.na(age_55_59) & is.na(age_60_64) & is.na(age_65_))
+            )
+          )
+head(should_impute)
+```
+
+# Do imputation:
+## prep fuller for age 15-19 by level
+```{r}
+level_15_19_mean_incomes <- data %>% 
+    filter(age == "15-19 years" & !is.na(mean_income) & !level_code %in% c('08', '09', '10')) %>% 
+    group_by(employed_code, level_code) %>% 
+    summarise(weighted_mean_income = weighted.mean(mean_income, people_count), people_count = sum(people_count))
+print(level_15_19_mean_incomes)
+### imputation value for level 8+
+higher_level_early_income_impute <- (level_15_19_mean_incomes %>% summarise(weighted_mean_income = max(weighted_mean_income)))
+higher_level_early_income_impute
+
+### assign level 8 - 10 imputation values
+higher_level_imputes <- tibble(employed_code = c(rep(1,3), rep(2,3), rep(3,3)), level_code = rep(c('08', '09', '10'),3))
+higher_level_imputes <- higher_level_imputes %>% left_join(higher_level_early_income_impute, by="employed_code")
+higher_level_imputes
+
+### bind together the level 1 - 6 dataset with level 7 - 10
+age_15_19_imputable_income <- rbind(level_15_19_mean_incomes %>% ungroup() %>% select(c("employed_code","level_code","weighted_mean_income")), higher_level_imputes)  %>%
+    mutate(mean_income = round2(weighted_mean_income, -2)) %>% select(-c("weighted_mean_income"))
+age_15_19_imputable_income
+
+##? join age 15 - 19 income dataset with wide income dataset
+ready_to_impute <- should_impute %>% 
+    left_join(age_15_19_imputable_income, by=c("employed_code","level_code")) %>%
+    rename(age_15_19_impute_income = mean_income)
+head(ready_to_impute)
+saveRDS(ready_to_impute,paste0("../datasets/dump_pre_impute_ft.rds"))
+```
+
+## Do actual imputation:
+```{r}
+impute_value = function(row) {
+    if (row["level_code"] %in% c('07', '08', '09', '10')) {
+        row["age_15_19"] <- row["age_15_19_impute_income"] # change these anyway
+    }
+    
+    if (row["can_impute"] == "TRUE" && as.numeric(row["missing_count"]) > 0) {
+        # first age group imputation:
+        if (is.na(row["age_15_19"])) {
+            row["age_15_19"] <- row["age_15_19_impute_income"] 
+        } 
+        # impute last age group:
+        if (is.na(row["age_65_"])) {
+            if (!is.na(row["age_60_64"])) {
+                row["age_65_"] <- row["age_60_64"]
+            } else if (!is.na(row["age_55_59"])) {
+                row["age_65_"] <- row["age_55_59"]
+            } else {
+                warning("To much missing information to impute last value")
+            }
+            row["age_65_"] <- row["age_15_19_impute_income"] 
+        }
+        for(age_group in 6:14) {
+            if(is.na(row[age_group])) {
+                if (!is.na(row[age_group + 1])) {
+                    row[age_group] <- mean(as.numeric(row[(age_group - 1)]), as.numeric(row[(age_group + 1)]))
+                } else if (age_group + 2 <= max(age_cols) && !is.na(row[age_group + 2])) {
+                    row[age_group] <- round2(as.numeric(row[(age_group - 1)]) + (1/3) * as.numeric(row[(age_group + 2)]) - as.numeric(row[(age_group - 1)]),-2) 
+                } else if (age_group + 3 <= max(age_cols) && !is.na(row[age_group + 3])) {
+                    row[age_group] <- round2(as.numeric(row[(age_group - 1)]) + (1/4) * as.numeric(row[(age_group + 3)]) - as.numeric(row[(age_group - 1)]),-2)
+                } else if (age_group + 4 <= max(age_cols) && !is.na(row[age_group + 4])) {
+                    row[age_group] <- round2(as.numeric(row[(age_group - 1)]) + (1/5) * as.numeric(row[(age_group + 4)]) - as.numeric(row[(age_group - 1)]),-2) 
+                } else if (age_group + 5 <= max(age_cols) && !is.na(row[age_group + 5])) {
+                    row[age_group] <- round2(as.numeric(row[(age_group - 1)]) + (1/6) * as.numeric(row[(age_group + 5)]) - as.numeric(row[(age_group - 1)]),-2) 
+                } else {
+                    warning("To much missing information to impute ", row["field"], row["level_code"], age_group)
+                    row[age_group] <- 0
+                }
+            }
+
+        }
+    }
+    return(row)
+}
+annual_income_with_imputation <- apply(ready_to_impute, 1, impute_value) %>% t %>% as_tibble %>% 
+    mutate_at(vars('age_15_19', 'age_20_24', 'age_25_29', 'age_30_34', 'age_35_39', 'age_40_44', 'age_45_49', 'age_50_54', 'age_55_59', 'age_60_64', 'age_65_'), funs(as.integer))
+head(annual_income_with_imputation)
+```
+
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "wide", table = "cen_annual_income_with_imputation"), annual_income_with_imputation, overwrite = TRUE)
+```
+
+# Construct yearly income estimates based on five year age bands
+
+```{r}
+age_lookup <- tibble(age_names = colnames(annual_income_with_imputation)[6:15], midpoint = seq(17, 62, by = 5))
+age_lookup
+```
+
+```{r}
+age_value_matrix <- annual_income_with_imputation %>% 
+    select(-c(Total, missing_count, can_impute, age_15_19_impute_income)) %>% apply(1, function(row) {
+    for(age_index in 1:(nrow(age_lookup) - 1)) {
+        lower_age_band <- age_lookup[age_index,]$age_names
+        upper_age_band <- age_lookup[age_index + 1,]$age_names
+
+        first_age <- age_lookup[age_index,]$midpoint
+        row[as.character(first_age)] <- as.numeric(row[lower_age_band])
+        # as.character(i)
+        for(i in (first_age+1):(first_age+4)) {
+
+
+            row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 5) + as.numeric(row[as.character(i - 1)])
+        }
+    }
+    
+    lower_age_band <- "age_60_64"
+    upper_age_band <- "age_65_"
+    first_age <- 62
+    row[as.character(first_age)] <- as.numeric(row[lower_age_band])
+    # as.character(i)
+    for(i in (first_age+1):(first_age+2)) {
+        row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 3) + as.numeric(row[as.character(i - 1)])
+    }
+    row[as.character(65)] <- as.numeric(row[upper_age_band])
+    #i <- i + 1
+    #row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 5) + as.numeric(row[as.character(i - 1)])
+    return(row)
+})
+#head(age_value_matrix)
+```
+
+## Check that the columns will be named as expected
+```{r}
+colnames(age_value_matrix %>% t)
+```
+
+## Convert to long format and tibble
+```{r}
+yearly_gross_income_long <- age_value_matrix %>% t %>% as_tibble %>% 
+    select(-c(age_lookup$age_names, "age_65_")) %>%
+    pivot_longer(cols = -c(employed_code, level_code, level, field_code, field), names_to = "age", values_to = "gross_income") %>%
+    mutate(gross_income = as.integer(gross_income), age = as.integer(age))
+head(yearly_gross_income_long)
+```
+
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_yearly_gross_income"), yearly_gross_income_long, overwrite = TRUE)
+```
