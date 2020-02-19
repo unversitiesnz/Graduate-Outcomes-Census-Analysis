@@ -116,7 +116,7 @@ simplistic_lifetime_earnings %>%
 # Get fee estimates
 
 ```{r}
-fees_and_funding <- read.csv("../datasets/fees_durations_SAC.csv") %>% mutate(
+fees_and_funding <- read.csv("../program_costs/fees_durations_SAC.csv") %>% mutate(
   level_code = formatC(level_code, width = 2, flag = "0"),
   field_code = formatC(field_code, width = 4, flag = "0")
   
