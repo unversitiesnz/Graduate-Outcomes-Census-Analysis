@@ -5,8 +5,6 @@ output: html_notebook
 
 This notebook creates schemas in a database required for the processes to run.
 
-Testing editing R file.
-
 ```{r}
 create_schema_if_required <- function(con, name) {
     dbExecute(con, paste0("IF NOT EXISTS ( SELECT  schema_name FROM    information_schema.schemata WHERE   schema_name = '",name,"' ) BEGIN EXEC sp_executesql N'CREATE SCHEMA ",name,"'  END") )
