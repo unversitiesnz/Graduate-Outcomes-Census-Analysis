@@ -1,5 +1,5 @@
 ---
-title: "Envirnment setup"
+title: "Environment setup"
 output: html_notebook
 ---
 
