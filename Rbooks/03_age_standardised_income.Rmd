@@ -33,7 +33,7 @@ go_analysis_con
 ```{r}
 data <- dbGetQuery(go_analysis_con, "SELECT *
   FROM [lng].[cen_annual_avg_income]
-  where set_standard = 1 and employed_code = 1")
+  where set_standard = 1")
 head(data)
 ```
 
@@ -56,7 +56,8 @@ income_long <- annual_income_with_imputation %>% filter(can_impute == TRUE) %>%
                  age_55_59, age_60_64, age_65_
                 )
     ) %>%
-    filter(!is.na(mean_income))
+    filter(!is.na(mean_income)) %>%
+    mutate(employed_code = as.numeric(employed_code))
 head(income_long)
 ```
 
@@ -75,9 +76,10 @@ convert_to_unsafe_age
 ## Get the age distribution
 ```{r}
 get_income_age_distribution <- function(.data) {
-    age_distribution <- .data %>% group_by(age) %>% 
-      summarise(people_count = sum(people_count, na.rm = TRUE)) %>%
-      mutate(proportion = people_count/sum(.data$people_count, na.rm = TRUE))
+    age_distribution <- .data %>% group_by(employed_code, age) %>% 
+        summarise(people_count = sum(people_count, na.rm = TRUE)) %>%
+        group_by(employed_code) %>%
+        mutate(proportion = people_count/sum(people_count, na.rm = TRUE))
     return (age_distribution)
 }
 age_distribution <- data %>% select(-c(people_count)) %>% 
@@ -90,8 +92,8 @@ age_distribution
 ```{r}
 income_long %>% mutate(
     age = convert_to_unsafe_age[age]
-) %>% left_join(age_distribution, by="age") %>%
-group_by(level_code, level, field_code, field)
+) %>% left_join(age_distribution, by=c("employed_code", "age")) %>%
+group_by(employed_code, level_code, level, field_code, field)
 ```
 
 ## get people counts
@@ -99,7 +101,7 @@ group_by(level_code, level, field_code, field)
 all_ft_people_counts <- data %>% select(-c(people_count)) %>% 
     rename(people_count = people_count2) %>% 
     filter(age != 'Total') %>%
-    group_by(level_code, level, field_code, field) %>%
+    group_by(employed_code, level_code, level, field_code, field) %>%
     summarise(people_count = sum(people_count, na.rm = TRUE)) %>%
     filter(people_count > 0)
 head(all_ft_people_counts)
@@ -110,8 +112,8 @@ head(all_ft_people_counts)
 age_standard_income <- income_long %>% 
     mutate(
         age = convert_to_unsafe_age[age]
-    ) %>% left_join(age_distribution, by="age") %>%
-    group_by(level_code, level, field_code, field) %>%
+    ) %>% left_join(age_distribution, by=c("employed_code", "age")) %>%
+    group_by(employed_code, level_code, level, field_code, field) %>%
     summarise(age_sd_income = round2(weighted.mean(mean_income, proportion), -2)) %>%
     left_join(all_ft_people_counts) %>%
     mutate(Field_Text = paste(field_code, field)) %>%
@@ -120,17 +122,23 @@ head(age_standard_income)
 ```
 
 **TODO: Output long table to database** 
+```{r}
+dbWriteTable(go_analysis_con, 
+             Id(schema = "lng", table = "cen_inc_age_sd_annual"), 
+             age_standard_income %>% ungroup() %>% select(employed_code, Field_Text, level_code, age_sd_income, people_count), 
+             overwrite = TRUE)
+```
 
 # Output data
 ```{r}
-tabulated_income_a <- age_standard_income %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age_sd_income")
+tabulated_income_a <- age_standard_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age_sd_income")
 print(tabulated_income_a)
 dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_inc_age_sd_annual"), tabulated_income_a, overwrite = TRUE)
 ```
 
 
 ```{r}
-tabulated_counts <- age_standard_income %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "people_count")
+tabulated_counts <- age_standard_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "people_count")
 print(tabulated_counts)
 dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_inc_age_sd_annual_counts"), tabulated_counts, overwrite = TRUE)
 ```
