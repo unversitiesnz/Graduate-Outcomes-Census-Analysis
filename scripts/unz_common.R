@@ -1,3 +1,6 @@
+
+#This code sets up a series of common functions to be referred to from other codes.
+
 library(readxl)
 
 connect_to_GO_analysis_database <- function() {
@@ -10,7 +13,8 @@ connect_to_GO_analysis_database <- function() {
 
 # custom rounding function to do as expected.
 # this function has been passed around a bit: http://janajarecki.com/blog/2014/09/18/r-does-not-round-2-5-to-3/
-# it rounds the five value up. R rounds to the nearest even number.
+# Always rounds up a number ending in .5, when normally R rounds these to the nearest even number.
+
 round2 <- function(x, n) {
   posneg = sign(x)
 
@@ -47,7 +51,9 @@ nth <- function(v, first_value, second_value)
     paste(n, suffix, sep="")
 }
 
-# classification helpers
+# classification helpers: these functions extract field of study, occupation etc. classifications 
+# from metadata files
+
 append_classification_code <- function(dataset, txt_var, code_var, classification_file) {
     field_narrow <- read_excel(classification_file, na = "NA", skip=7)
     field_narrow
@@ -60,7 +66,6 @@ append_classification_code <- function(dataset, txt_var, code_var, classificatio
     
     return(data2)
 }
-
 
 append_narrow_field_of_study_code <- function(.data, ..., field_var, code_var = paste0(field_var,"_code")) {
     return(append_classification_code(.data, field_var, code_var, "../metadata/NZSCED_narrow_cen.xlsx"))

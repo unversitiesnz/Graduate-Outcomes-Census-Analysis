@@ -29,14 +29,15 @@ head(data)
 
 
 # Work on 30 - 39 year old incomes
-
+##Creating two large functions, one which gets mean incomes by qual level and field for age bracket, and other which tabulates and save the income set
 ```{r}
 get_30_39_income_summary_set <- function (.data) {
     temp <- .data %>% 
         filter(age %in% c("30-34 years", "35-39 years")) %>%
         mutate(
             Field_Text = paste(field_code, field)
-            , level_code = ifelse(level_code == '11', '03', level_code)
+            , level_code = ifelse(level_code == '11', '03', level_code) 
+            #11 is overseas secondary school qual, setting to level 3
         ) %>% 
         group_by(level_code, Field_Text) %>%
         summarise(mean_income = round2(mean(mean_income, na.rm = TRUE), -2), people_count = sum(people_count, na.rm = TRUE)) %>%

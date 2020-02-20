@@ -3,11 +3,7 @@ title: "Clean income data"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*.
-
-The dataset produced by stats nz is not in a very easy to handle format, with spaces in everything, this notebook produces a few easier to use datasets.
+The dataset produced by Stats NZ is not in a very easy to handle format, with spaces in everything. This notebook produces a few easier-to-use datasets.
 
 ```{r}
 library(tidyverse)
@@ -16,12 +12,7 @@ library(openxlsx)
 library(DBI)
 source("../scripts/unz_common.R")
 ```
-
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+Imports raw data and skips first few rows to where data begins.
 
 ```{r}
 data <- read_excel("../input_data/JOB-10148-1 - Field of Study income.xlsx", na = "NA", skip=7)
@@ -30,7 +21,6 @@ head(data)
 
 There is a row at the end of the file which is not data, it needs to be removed.
 ```{r}
-# remove non data row at end
 data <- data[!is.na(data$`Mean Income ($)`),]
 tail(data)
 ```
@@ -96,7 +86,7 @@ Write the table before any transformations are done.
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_income_bands"), cen_income_bands, overwrite = TRUE)
 ```
 
-'Restricted' counts and incomes exclude those who earned $25,000 a year or less. Multiply counts by income band midpoint to get total income.
+'Restricted' counts and incomes exclude those who earned $25,000 a year or less. Multiply counts by income band midpoint to get total income. Counts and incomes with suffix '2' exclude those who earned no income or made a loss.
 
 ```{r}
 cen_annual_avg_income <- cen_income_bands %>% mutate(
@@ -137,9 +127,7 @@ head(cen_annual_avg_income)
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income"), cen_annual_avg_income, overwrite = TRUE)
 ```
 
-
-
-NOT SURE IF THESE SECTIONs ARE NEEDED
+Adding data for counts and mean incomes limited to those who earned more than $25,000 AND employed full-time.
 ```{r}
 cen_annual_avg_income2 <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income"))
 unique(cen_annual_avg_income2$level_code)

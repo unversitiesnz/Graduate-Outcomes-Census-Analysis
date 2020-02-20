@@ -4,8 +4,12 @@ output: html_notebook
 ---
 
 This notebook creates schemas in a database required for the processes to run.
+(These are used to categorise types of tables, e.g. long format, wide format. They are prefixes
+to table names in the database, and are similar to libraries in SAS.)
 
 ```{r}
+library(DBI)
+
 create_schema_if_required <- function(con, name) {
     dbExecute(con, paste0("IF NOT EXISTS ( SELECT  schema_name FROM    information_schema.schemata WHERE   schema_name = '",name,"' ) BEGIN EXEC sp_executesql N'CREATE SCHEMA ",name,"'  END") )
 }
