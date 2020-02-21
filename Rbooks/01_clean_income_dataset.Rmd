@@ -33,7 +33,7 @@ data2 <- data %>%
 head(data2)
 ```
 
-Remove some data which is never used, and define standard data used. The helps prevent double counts.
+Remove some data which is never used, and define standard data used (rows corresponding to the standard qualifications that we are interested in). The helps prevent double counts.
 ```{r}
 data4 <- data2 %>%
     filter(

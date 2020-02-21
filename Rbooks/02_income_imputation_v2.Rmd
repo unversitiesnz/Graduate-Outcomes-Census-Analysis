@@ -17,7 +17,7 @@ source("../scripts/unz_common.R")
 go_analysis_con <- connect_to_GO_analysis_database()
 go_analysis_con
 ```
-
+Limit data to people with standard qualifications who did not earn nothing or make a loss.
 ```{r}
 data <- dbGetQuery(go_analysis_con, "SELECT *
   FROM [lng].[cen_annual_avg_income]
@@ -57,11 +57,11 @@ should_impute <- wide_form %>% left_join(missing_count, by=c("employed_code","fi
                 (is.na(age_25_29) & is.na(age_30_34) & is.na(age_35_39) & is.na(age_40_44)) |
                 (is.na(age_30_34) & is.na(age_35_39) & is.na(age_40_44) & is.na(age_45_49)) |
                 (is.na(age_35_39) & is.na(age_40_44) & is.na(age_45_49) & is.na(age_50_54)) |
-                # Can't impute if there is a run of three missing between 50 and 65
+                # Can't impute if there is a run of three missing between 50 and 65+
                 (is.na(age_50_54) & is.na(age_55_59) & is.na(age_60_64)) |
                 (is.na(age_55_59) & is.na(age_60_64) & is.na(age_65_))
             )
-          )
+    )
 head(should_impute)
 ```
 
@@ -200,6 +200,7 @@ colnames(age_value_matrix %>% t)
 
 ## Convert to long format and tibble
 ```{r}
+#Data is in wide format. Age brackets are replaced with individual ages 17-65
 yearly_gross_income_long <- age_value_matrix %>% t %>% as_tibble %>% 
     select(-c(age_lookup$age_names, "age_65_")) %>%
     pivot_longer(cols = -c(employed_code, level_code, level, field_code, field), names_to = "age", values_to = "gross_income") %>%

@@ -1,6 +1,8 @@
 ---
 title: "Age Standard Income"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 Constuct age standard income. I don't know why doing this is being done, not really.
