@@ -1,0 +1,247 @@
+---
+title: "Graduate Outcomes Datacube"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(DBI)
+library(readxl)
+library(openxlsx)
+source("../scripts/unz_common.R")
+```
+
+## Connect to analysis database
+
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+
+# Read input file
+```{r}
+grad_outcomes_datacube <- read_excel("../input_data/t3b - Occupation by narrow field of study- checked.xlsx", sheet = "Occupation by narrow study", skip=4)
+head(grad_outcomes_datacube)
+```
+
+
+```{r}
+grad_cube2 <- grad_outcomes_datacube %>% mutate(i_occupation_code = as.character(i_occupation_code)) %>% 
+    append_ANZSCO_L5_txt(code_var = "i_occupation_code", ANZSCO_var = "occupation_text") %>%
+    mutate(narrow_field_code = formatC(narrow_field_code, width = 4, format = "d", flag = "0")) %>%
+    append_narrow_field_of_study_txt(code_var = "narrow_field_code", field_var = "narrow_field_text") %>%
+    filter(!i_standard_highest_qual_code %in% c(97, 99)) %>%
+    mutate(
+        i_standard_highest_qual_code =  formatC(i_standard_highest_qual_code, width = 2, format = "d", flag = "0"),
+        i_standard_highest_qual_code = ifelse(i_standard_highest_qual_code == '11', 'OS', i_standard_highest_qual_code)
+    )
+head(grad_cube2)
+```
+
+
+# get top 30 occupations
+```{r}
+top_occupations_1 <- grad_cube2 %>% mutate(
+    occupation_id = paste(i_occupation_code, occupation_text),
+    occupation = paste0(occupation_id, ' (', people_count, ')')
+) %>% group_by(
+    narrow_field_code, narrow_field_text, i_standard_highest_qual_code
+) %>% arrange(narrow_field_code, narrow_field_text, i_standard_highest_qual_code) %>% 
+    arrange(desc(people_count), .by_group = TRUE) %>%
+    mutate(
+        occupationRank = 1:n(),
+        rankText = nth(v = occupationRank, first_value =  "top occupation", second_value = '2nd occupation'),
+        field_id = paste0(narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
+    ) %>%
+filter(occupationRank <= 30) %>% select(
+    field_id, narrow_field_code, narrow_field_text, i_standard_highest_qual_code, occupationRank, rankText, occupation
+) 
+head(top_occupations_1)
+```
+
+```{r}
+top_occupations_2 <- top_occupations_1 %>% ungroup() %>% select(-c(occupationRank, narrow_field_text, i_standard_highest_qual_code)) %>% pivot_wider(values_from = occupation, names_from = "rankText")
+head(top_occupations_2)
+```
+
+```{r}
+field_of_study_totals <- read_excel("../input_data/t3b - Occupation by narrow field of study- Checked.xlsx", sheet="narrow field of study totals", skip = 5, col_types = c('numeric','numeric', 'numeric')) %>%
+    filter(set_code == 1) %>% mutate(narrow_field_code = formatC(narrow_field_code, width = 4, format = "d", flag = "0") ) %>%
+    select(narrow_field_code, people_count)
+head(field_of_study_totals)
+```
+
+
+```{r}
+top_occupations_3 <- top_occupations_2 %>% left_join(field_of_study_totals) %>% select(field_id, narrow_field_code, people_count, everything())
+head(top_occupations_3)
+```
+
+
+```{r}
+dbWriteTable(go_analysis_con, name = "top_occupations", top_occupations_3, overwrite = TRUE)
+```
+
+```{r}
+top_occupations_4 <- top_occupations_3 %>% t %>% as.data.frame(stringsAsFactors = FALSE)
+head(top_occupations_4)
+```
+
+# get top 25 field/levels
+```{r}
+top_fields_1 <- grad_cube2 %>% mutate(
+    field_id = paste('lvl', i_standard_highest_qual_code, narrow_field_text),
+    field = paste0(field_id, ' (', people_count, ')')
+) %>% group_by(
+    i_occupation_code, occupation_text
+) %>% arrange(i_occupation_code, occupation_text) %>% 
+    arrange(desc(people_count), .by_group = TRUE) %>%
+    mutate(
+        fieldRank = 1:n(),
+        rankText = nth(v = fieldRank, first_value =  "top field of study", second_value = '2nd field of study'),
+        occupation_id = paste(i_occupation_code, occupation_text)
+    ) %>%
+filter(fieldRank <= 30) %>% ungroup() %>%
+select(occupation_id, i_occupation_code, occupation_text, field, fieldRank, rankText)
+
+head(top_fields_1)
+```
+
+```{r}
+top_fields_2 <- top_fields_1 %>% ungroup() %>% select(-fieldRank) %>% pivot_wider(values_from = field, names_from = "rankText")
+head(top_fields_2)
+```
+
+```{r}
+ typical_study_levels <- dbReadTable(go_analysis_con, name = "typical_study_levels") %>% mutate(i_occupation_code = as.character(i_occupation_code))
+typical_study_levels$typical_study <- factor(typical_study_levels$typical_study, levels = 1:5, labels = c("School", "Cert/Dipl", "Mixed", "Tertiary","Degree"))
+head(typical_study_levels)
+```
+
+```{r}
+occupation_totals <- read_excel("../input_data/t3 - Occupation by field of study - Checked.xlsx", sheet="Occupation totals", skip = 4, col_types = c('text', 'numeric'))
+head(occupation_totals)
+```
+
+```{r}
+top_fields_3 <- top_fields_2 %>% 
+    left_join(typical_study_levels) %>% 
+    left_join(occupation_totals) %>% 
+    
+    select(occupation_id, i_occupation_code, occupation_text, people_count, typical_study, everything()) %>% select(-c(occupation_text, i_occupation_code))
+head(top_fields_3)
+```
+
+```{r}
+top_fields_4 <- top_fields_3 %>% t %>% as.data.frame(stringsAsFactors = FALSE)
+head(top_fields_4)
+```
+
+# Build cross reference tables
+```{r}
+degree_keys <- read_excel("../metadata/degree_key_lookup.xlsx") %>% select(-occupation_text) %>% rename(i_occupation_code = anzsco_code)
+head(degree_keys)
+```
+
+```{r}
+occupation_cross_ref_table <- grad_cube2 %>% mutate(
+    field_id = paste0(narrow_field_code, ' ', narrow_field_text, '[lvl-', i_standard_highest_qual_code, ']')
+) %>%
+    pivot_wider(id_cols = c(occupation_text, i_occupation_code), names_from = field_id, values_from = people_count) %>%
+    arrange(occupation_text) %>% left_join(degree_keys)
+head(occupation_cross_ref_table)
+```
+
+```{r}
+field_level_cross_ref_table <- grad_cube2 %>% mutate(
+    occupation_id = paste0(occupation_text)
+) %>% arrange(occupation_id) %>%
+    pivot_wider(id_cols = c(narrow_field_text, i_standard_highest_qual_code, narrow_field_code), names_from = occupation_id, values_from = people_count) %>%
+    arrange(narrow_field_code)
+head(field_level_cross_ref_table)
+```
+
+# Output excel
+```{r}
+wb <- createWorkbook('Scott Henwood @ Universities NZ')
+# sheet names
+occupation_sheet_name <- "Top 30 Qualifications"
+field_of_study_sheet_name <- "Top 25 Jobs"
+occupation_cross_name <- "occupation by field of study"
+field_of_study_cross_name <- "field of study by occupation"
+# creating worksheets
+addWorksheet(wb, occupation_sheet_name)
+addWorksheet(wb, field_of_study_sheet_name)
+addWorksheet(wb, occupation_cross_name)
+addWorksheet(wb, field_of_study_cross_name)
+
+wb
+```
+
+```{r}
+primary_occupation_output <- top_fields_4
+writeData(wb,occupation_sheet_name,primary_occupation_output, rowNames=TRUE, colNames = FALSE)
+```
+
+```{r}
+colRange <- 2:(ncol(primary_occupation_output)+1)
+rowRange <- 4:(nrow(primary_occupation_output)+3)
+#Freeze panes
+freezePane(wb, occupation_sheet_name, firstActiveRow = 2,  firstActiveCol = 2)
+# apply conditional formating
+conditionalFormatting(wb, occupation_sheet_name, colRange, rowRange, rule="INT(MID(INDIRECT(ADDRESS(ROW(),COLUMN())),5,2))>=0", style = openxlsx::createStyle(bgFill = "#F4C724"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, rowRange, rule='=MID(INDIRECT(ADDRESS(ROW(),COLUMN())),5,2)="OS"', style = openxlsx::createStyle(bgFill = "#F4C724"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, rowRange, rule="INT(MID(INDIRECT(ADDRESS(ROW(),COLUMN())),5,2))>3", style = openxlsx::createStyle(bgFill = "#74B9FF"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, rowRange, rule="INT(MID(INDIRECT(ADDRESS(ROW(),COLUMN())),5,2))>=7", style = openxlsx::createStyle(bgFill = "#45CE30"))
+#apply static formatting
+setColWidths(wb, occupation_sheet_name, cols = colRange, widths = '16')
+addStyle(wb, occupation_sheet_name, openxlsx::createStyle(wrapText =TRUE), rows = rowRange, cols = colRange, gridExpand = TRUE)
+
+#apply conditional formating for occupation row
+typical_study_row = 3
+conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="School"'), style = openxlsx::createStyle(bgFill = "#bf8f00"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Cert/Dipl"'), style = openxlsx::createStyle(bgFill = "#b4c6e7"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Mixed"'), style = openxlsx::createStyle(bgFill = "#ededed"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Tertiary"'), style = openxlsx::createStyle(bgFill = "#92d050"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Degree"'), style = openxlsx::createStyle(bgFill = "#00ff00"))
+#apply static formatting
+addStyle(wb, occupation_sheet_name, openxlsx::createStyle(wrapText =TRUE, textDecoration = "bold"), rows = 1, cols = colRange, gridExpand = TRUE)
+
+
+conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="School"', style = openxlsx::createStyle(bgFill = "#bf8f00"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Cert/Dipl"', style = openxlsx::createStyle(bgFill = "#b4c6e7"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Mixed"', style = openxlsx::createStyle(bgFill = "#ededed"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Tertiary"', style = openxlsx::createStyle(bgFill = "#92d050"))
+conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Degree"', style = openxlsx::createStyle(bgFill = "#00ff00"))
+# style first collumn
+setColWidths(wb, occupation_sheet_name, cols = 1, widths = '23')
+addStyle(wb, occupation_sheet_name, openxlsx::createStyle(textDecoration = "bold"), rows = rowRange, cols = 1, gridExpand = TRUE)
+```
+
+```{r}
+primary_field_of_study_output <- top_occupations_4
+openxlsx::writeData(wb,field_of_study_sheet_name,primary_field_of_study_output, rowNames=TRUE, colNames = FALSE)
+```
+
+```{r}
+colRange <- 2:(ncol(primary_field_of_study_output)+1)
+rowRange <- 2:(nrow(primary_field_of_study_output)+1)
+
+freezePane(wb, field_of_study_sheet_name, firstActiveRow = 2,  firstActiveCol = 2)
+setColWidths(wb, field_of_study_sheet_name, cols = colRange, widths = '16')
+addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE), rows = rowRange, cols = colRange, gridExpand = TRUE)
+
+addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecoration = "bold"), rows = 1, cols = colRange, gridExpand = TRUE)
+
+# Set left pane:
+setColWidths(wb, field_of_study_sheet_name, cols = colRange, widths = '23')
+addStyle(wb, field_of_study_sheet_name, createStyle(textDecoration = "bold"), rows = rowRange, cols = 1, gridExpand = TRUE)
+```
+
+```{r}
+writeData(wb,occupation_cross_name,occupation_cross_ref_table, rowNames=FALSE, colNames = TRUE)
+writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
+openxlsx::saveWorkbook(wb, '../working_outputs/Occupation by Field of Study Analysis 2.xlsx', overwrite = T)
+```
