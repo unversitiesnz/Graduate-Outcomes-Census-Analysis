@@ -61,7 +61,8 @@ income_long <- annual_income_with_imputation %>% filter(can_impute == TRUE) %>%
 head(income_long)
 ```
 
-How is this bit used?
+## define rename from column naming back to names with spaces
+Used to change the text to human readable for a column, also needed to make some joins work. 
 ```{r}
 
 convert_to_unsafe_age <- c("age_15_19" = "15-19 years", "age_20_24" = "20-24 years",    
@@ -121,7 +122,7 @@ age_standard_income <- income_long %>%
 head(age_standard_income)
 ```
 
-**TODO: Output long table to database** 
+# Output data
 ```{r}
 dbWriteTable(go_analysis_con, 
              Id(schema = "lng", table = "cen_inc_age_sd_annual"), 
@@ -129,14 +130,14 @@ dbWriteTable(go_analysis_con,
              overwrite = TRUE)
 ```
 
-# Output data
+## output standardised income
 ```{r}
 tabulated_income_a <- age_standard_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age_sd_income")
 print(tabulated_income_a)
 dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_inc_age_sd_annual"), tabulated_income_a, overwrite = TRUE)
 ```
 
-
+## output people counts
 ```{r}
 tabulated_counts <- age_standard_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "people_count")
 print(tabulated_counts)
