@@ -90,7 +90,7 @@ age_distribution <- data %>% select(-c(people_count)) %>%
 age_distribution
 ```
 
-## Convert income to long
+## Add age bracket %'s and new age names to long income data
 ```{r}
 income_long %>% mutate(
     age = convert_to_unsafe_age[age]
