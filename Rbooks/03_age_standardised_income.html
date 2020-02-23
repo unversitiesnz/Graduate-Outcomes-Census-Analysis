@@ -1645,7 +1645,7 @@ summary {
 <h2>Load libraries and scripts</h2>
 <pre class="r"><code>library(tidyverse)</code></pre>
 <pre><code>## Warning: package &#39;tidyverse&#39; was built under R version 3.6.2</code></pre>
-<pre><code>## -- Attaching packages ----------------------------------------------------------------------------------------------- tidyverse 1.3.0 --</code></pre>
+<pre><code>## -- Attaching packages ------------------------------------------------------- tidyverse 1.3.0 --</code></pre>
 <pre><code>## v ggplot2 3.2.1     v purrr   0.3.3
 ## v tibble  2.1.3     v dplyr   0.8.4
 ## v tidyr   1.0.2     v stringr 1.4.0
@@ -1658,7 +1658,7 @@ summary {
 <pre><code>## Warning: package &#39;dplyr&#39; was built under R version 3.6.2</code></pre>
 <pre><code>## Warning: package &#39;stringr&#39; was built under R version 3.6.2</code></pre>
 <pre><code>## Warning: package &#39;forcats&#39; was built under R version 3.6.2</code></pre>
-<pre><code>## -- Conflicts -------------------------------------------------------------------------------------------------- tidyverse_conflicts() --
+<pre><code>## -- Conflicts ---------------------------------------------------------- tidyverse_conflicts() --
 ## x dplyr::filter() masks stats::filter()
 ## x dplyr::lag()    masks stats::lag()</code></pre>
 <pre class="r"><code>library(dbplyr)</code></pre>
@@ -1728,7 +1728,10 @@ head(income_long)</code></pre>
 {"columns":[{"label":["employed_code"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["level_code"],"name":[2],"type":["chr"],"align":["left"]},{"label":["level"],"name":[3],"type":["chr"],"align":["left"]},{"label":["field_code"],"name":[4],"type":["chr"],"align":["left"]},{"label":["field"],"name":[5],"type":["chr"],"align":["left"]},{"label":["age"],"name":[6],"type":["chr"],"align":["left"]},{"label":["mean_income"],"name":[7],"type":["int"],"align":["right"]}],"data":[{"1":"1","2":"00","3":"No Qualification","4":"0000","5":"No Post-School Qualification","6":"age_15_19","7":"24400"},{"1":"1","2":"00","3":"No Qualification","4":"0000","5":"No Post-School Qualification","6":"age_20_24","7":"32000"},{"1":"1","2":"00","3":"No Qualification","4":"0000","5":"No Post-School Qualification","6":"age_25_29","7":"39600"},{"1":"1","2":"00","3":"No Qualification","4":"0000","5":"No Post-School Qualification","6":"age_30_34","7":"46200"},{"1":"1","2":"00","3":"No Qualification","4":"0000","5":"No Post-School Qualification","6":"age_35_39","7":"49300"},{"1":"1","2":"00","3":"No Qualification","4":"0000","5":"No Post-School Qualification","6":"age_40_44","7":"49700"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-<p>How is this bit used?</p>
+</div>
+<div id="define-rename-from-column-naming-back-to-names-with-spaces" class="section level2">
+<h2>define rename from column naming back to names with spaces</h2>
+<p>Used to change the text to human readable for a column, also needed to make some joins work.</p>
 <pre class="r"><code>convert_to_unsafe_age &lt;- c(&quot;age_15_19&quot; = &quot;15-19 years&quot;, &quot;age_20_24&quot; = &quot;20-24 years&quot;,    
 &quot;age_25_29&quot; = &quot;25-29 years&quot;, &quot;age_30_34&quot; = &quot;30-34 years&quot;, &quot;age_35_39&quot; = &quot;35-39 years&quot;,     
 &quot;age_40_44&quot; = &quot;40-44 years&quot;, &quot;age_45_49&quot; = &quot;45-49 years&quot;, &quot;age_50_54&quot; = &quot;50-54 years&quot;,   
@@ -1762,8 +1765,8 @@ age_distribution</code></pre>
   </script>
 </div>
 </div>
-<div id="convert-income-to-long" class="section level2">
-<h2>Convert income to long</h2>
+<div id="add-age-bracket-s-and-new-age-names-to-long-income-data" class="section level2">
+<h2>Add age bracket %’s and new age names to long income data</h2>
 <pre class="r"><code>income_long %&gt;% mutate(
     age = convert_to_unsafe_age[age]
 ) %&gt;% left_join(age_distribution, by=c(&quot;employed_code&quot;, &quot;age&quot;)) %&gt;%
@@ -1810,14 +1813,15 @@ head(all_ft_people_counts)</code></pre>
 {"columns":[{"label":["employed_code"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["level_code"],"name":[2],"type":["chr"],"align":["left"]},{"label":["level"],"name":[3],"type":["chr"],"align":["left"]},{"label":["field_code"],"name":[4],"type":["chr"],"align":["left"]},{"label":["field"],"name":[5],"type":["chr"],"align":["left"]},{"label":["age_sd_income"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["people_count"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["Field_Text"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"1","2":"00","3":"No Qualification","4":"0000","5":"No Post-School Qualification","6":"46700","7":"176646","8":"0000 No Post-School Qualification"},{"1":"1","2":"01","3":"Level 1 Certificate","4":"0000","5":"No Post-School Qualification","6":"55800","7":"126888","8":"0000 No Post-School Qualification"},{"1":"1","2":"01","3":"Level 1 Certificate","4":"0101","5":"Mathematical Sciences","6":"60700","7":"90","8":"0101 Mathematical Sciences"},{"1":"1","2":"01","3":"Level 1 Certificate","4":"0109","5":"Biological Sciences","6":"34600","7":"30","8":"0109 Biological Sciences"},{"1":"1","2":"01","3":"Level 1 Certificate","4":"0199","5":"Other Natural and Physical Sciences","6":"39500","7":"30","8":"0199 Other Natural and Physical Sciences"},{"1":"1","2":"01","3":"Level 1 Certificate","4":"0200","5":"Information Technology not further defined","6":"58300","7":"39","8":"0200 Information Technology not further defined"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-<p><strong>TODO: Output long table to database</strong></p>
+</div>
+<div id="output-data" class="section level1">
+<h1>Output data</h1>
 <pre class="r"><code>dbWriteTable(go_analysis_con, 
              Id(schema = &quot;lng&quot;, table = &quot;cen_inc_age_sd_annual&quot;), 
              age_standard_income %&gt;% ungroup() %&gt;% select(employed_code, Field_Text, level_code, age_sd_income, people_count), 
              overwrite = TRUE)</code></pre>
-</div>
-<div id="output-data" class="section level1">
-<h1>Output data</h1>
+<div id="output-standardised-income" class="section level2">
+<h2>output standardised income</h2>
 <pre class="r"><code>tabulated_income_a &lt;- age_standard_income %&gt;% pivot_wider(id_cols = c(&quot;employed_code&quot;, &quot;level_code&quot;, &quot;Field_Text&quot;), names_from = level_code,names_prefix = &quot;lvl &quot;, values_from = &quot;age_sd_income&quot;)
 print(tabulated_income_a)</code></pre>
 <pre><code>## # A tibble: 235 x 13
@@ -1837,6 +1841,9 @@ print(tabulated_income_a)</code></pre>
 ## # ... with 225 more rows, and 6 more variables: `lvl 05` &lt;dbl&gt;, `lvl 07` &lt;dbl&gt;,
 ## #   `lvl 08` &lt;dbl&gt;, `lvl 09` &lt;dbl&gt;, `lvl 10` &lt;dbl&gt;, `lvl 11` &lt;dbl&gt;</code></pre>
 <pre class="r"><code>dbWriteTable(go_analysis_con, Id(schema = &quot;tab&quot;, table = &quot;cen_inc_age_sd_annual&quot;), tabulated_income_a, overwrite = TRUE)</code></pre>
+</div>
+<div id="output-people-counts" class="section level2">
+<h2>output people counts</h2>
 <pre class="r"><code>tabulated_counts &lt;- age_standard_income %&gt;% pivot_wider(id_cols = c(&quot;employed_code&quot;, &quot;level_code&quot;, &quot;Field_Text&quot;), names_from = level_code,names_prefix = &quot;lvl &quot;, values_from = &quot;people_count&quot;)
 print(tabulated_counts)</code></pre>
 <pre><code>## # A tibble: 235 x 13
@@ -1856,6 +1863,7 @@ print(tabulated_counts)</code></pre>
 ## # ... with 225 more rows, and 6 more variables: `lvl 05` &lt;dbl&gt;, `lvl 07` &lt;dbl&gt;,
 ## #   `lvl 08` &lt;dbl&gt;, `lvl 09` &lt;dbl&gt;, `lvl 10` &lt;dbl&gt;, `lvl 11` &lt;dbl&gt;</code></pre>
 <pre class="r"><code>dbWriteTable(go_analysis_con, Id(schema = &quot;tab&quot;, table = &quot;cen_inc_age_sd_annual_counts&quot;), tabulated_counts, overwrite = TRUE)</code></pre>
+</div>
 </div>
 
 
