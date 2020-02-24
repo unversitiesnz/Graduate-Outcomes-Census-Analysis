@@ -1,0 +1,79 @@
+---
+title: "Consolidate long income datasets"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(DBI)
+source("../scripts/unz_common.R")
+```
+
+## A connection to an analysis database
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+
+# Load long income datasets
+
+## 30 - 39 year old income
+
+```{r}
+income_30_39 <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_3_avg_income_30_39"))
+head(income_30_39)
+```
+
+```{r}
+income_30_39 %>% pivot_wider(id_cols = c(Field_Text, level_code), names_from = "employed_code", values_from = c("mean_income", "people_count"), names_prefix = "emp_")
+```
+
+### Fulltime and part-time collumns
+```{r}
+income_30_39_ready <- income_30_39 %>% pivot_wider(id_cols = c(Field_Text, level_code), names_from = "employed_code", values_from = c("mean_income", "people_count"), names_prefix = "emp_") %>%
+    rename(
+        ft_30_39_annual_income = mean_income_emp_1, 
+        all_30_39_annual_income = mean_income_emp_2,
+        ft_30_39_people_count = people_count_emp_1,
+        all_30_39_people_count = people_count_emp_2
+        ) %>% 
+    select(-c(mean_income_emp_3, people_count_emp_3))
+head(income_30_39_ready)
+```
+
+## Age Standardised income
+```{r}
+income_sd <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_inc_age_sd_annual"))
+head(income_sd)
+```
+
+### Fulltime and part-time collumns
+```{r}
+income_sd_ready <- income_sd %>% pivot_wider(id_cols = c(Field_Text, level_code), names_from = "employed_code", values_from = c("age_sd_income", "people_count"), names_prefix = "emp_") %>%
+    rename(
+        ft_sd_annual_income = age_sd_income_emp_1, 
+        all_sd_annual_income = age_sd_income_emp_2,
+        ft_people_count = people_count_emp_1,
+        all_people_count = people_count_emp_2
+        ) %>% select(-c(age_sd_income_emp_3, people_count_emp_3))
+head(income_sd_ready)
+```
+
+## lifetime earnings datasets
+```{r}
+lifetime_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_lifetime_income2"))
+head(lifetime_income)
+```
+
+
+# Merge datasets
+```{r}
+income_30_39_ready %>% 
+    full_join(income_sd_ready ,by=c("Field_Text", "level_code")) %>% 
+    full_join(lifetime_income ,by=c("Field_Text", "level_code"))
+
+```
+
+
+
