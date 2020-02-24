@@ -66,17 +66,29 @@ lifetime_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_
 head(lifetime_income)
 ```
 
+## age better off
+```{r}
+age_better_off <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "age_better_off")) %>%
+    rename(
+        age_when_better_off = age,
+        ever_better_off = better_off
+    )
+head(age_better_off)
+```
+
 
 # Merge datasets
 ```{r}
-income_30_39_ready %>% 
+consolidated_income <- income_30_39_ready %>% 
     full_join(income_sd_ready ,by=c("Field_Text", "level_code")) %>% 
-    full_join(lifetime_income ,by=c("Field_Text", "level_code"))
+    full_join(lifetime_income ,by=c("Field_Text", "level_code")) %>%
+    full_join(age_better_off, by=c("Field_Text", "level_code"))
+head(consolidated_income)
 
 ```
 
 # output merged income dataset
 
 ```{r}
-dbWriteTable(go_analysis_con, Id(schema = "lng", table = "consolidated_income"))
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "consolidated_income"), consolidated_income, overwrite = TRUE)
 ```
