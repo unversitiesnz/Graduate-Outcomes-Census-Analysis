@@ -75,5 +75,8 @@ income_30_39_ready %>%
 
 ```
 
+# output merged income dataset
 
-
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "consolidated_income"))
+```
