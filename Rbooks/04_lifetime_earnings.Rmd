@@ -274,6 +274,8 @@ summarised_lifetime_income %>%
     head()
 ```
 
+
+Finding age at which graduates are better off financially than school-leavers, by finding the year at which npv_over_school_leaver becomes positive
 ```{r}
 age_when_better_off <- npv_calculated %>% mutate(
     better_off = ifelse(lag(npv_over_school_leaver) <= 0 & npv_over_school_leaver > 0, TRUE, FALSE),
