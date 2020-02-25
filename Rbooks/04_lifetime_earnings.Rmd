@@ -139,7 +139,7 @@ head(income_with_fees)
 tax_calculated <- income_with_fees %>% group_by(field, level) %>% arrange(age) %>% 
     mutate( #Offset income = income, unless younger than minimum qual completion age
         offset_income = ifelse(is.na(duration_whole_yr), gross_income, ifelse(age < 17 + duration_whole_yr, 0, gross_income)),
-        loan_repayments = ifelse( # If the total loan contributions minus current one are greater than loan, repayment = 0. Otherwise, if 
+        loan_repayments = ifelse( # ??? Unsure about this code
             cumsum(offset_income * 0.12) - (offset_income * 0.12) >= loan_at_graduation, 
             0,
             ifelse(cumsum(offset_income * 0.12) >= loan_at_graduation,
@@ -192,8 +192,13 @@ head(components_calculated)
 
 
 # Calculating Net Present Value (NPV)
+
+NPV = COST OF INVESTMENT - SUM(PRESENT VALUE RETURN FOR EACH TIME PERIOD)
+PRESENT VALUE RETURN FOR EACH TIME PERIOD = VALUE * (1/(1+inflation rate))^no. periods
+
+or, discounted_income_tax_paid_above_school_leaver_m_sac = tax_paid_above_school_leaver_m_sac * (v ^ t),
 ```{r}
-i <- 0.03
+i <- 0.03 #Discount rate or return that could be made from alternative investment (in this case, not paying SAC funding) = INFLATION RATE = 3%
 v <- 1 / (1+i)
 print(c(i,v))
 npv_calculated <- components_calculated %>% 
