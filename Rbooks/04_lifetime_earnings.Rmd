@@ -301,3 +301,8 @@ dbWriteTable(go_analysis_con, Id(schema = "tab", table = paste0("cen_age_better_
 npv_calculated %>% filter(field_code == "0201", level_code == "07") %>%
     select(age, gross_income)
 ```
+
+# Output age when better off in long format
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "age_better_off"), age_when_better_off)
+```

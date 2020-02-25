@@ -1,7 +1,9 @@
 # R files which change often
 .Rproj.user
 .Rhistory
+.RData
 *.nb.html
+*.html
 *.log
 *.knit.md
 *.utf8.md

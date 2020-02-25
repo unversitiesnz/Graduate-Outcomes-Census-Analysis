@@ -3,8 +3,23 @@ title: "Calculate Typical Study Level"
 output: html_notebook
 ---
 
-inline code? `r "printed"`
+inline code? `r "test"`
 
+The objective of this notebook is to calculate the typical study level of individuals in different occupation.
+
+This is done by calculating how many individuals are at different levels, making that a proportion and adding them together to see if any of the groups are met.
+
+The groups are (in this order):
+
+* school (level 0 - 3)
+* certificates and diplomas (level 4 - 6)
+* degree (level 7+)
+* tertiary (level 4+)
+* mixed (if none of the above selected)
+
+
+# Setup
+## Libs
 ```{r}
 library(tidyverse)
 library(dbplyr)
@@ -13,7 +28,7 @@ library(readxl)
 ```
 
 
-# Read occupation file
+## Read occupation file
 ```{r}
 occupation_studylevel <- read_excel("../input_data/t3 - Occupation by field of study - Checked.xlsx", sheet="Occupation by level totals", skip = 4)
 head(occupation_studylevel)
@@ -21,7 +36,7 @@ head(occupation_studylevel)
 
 ## compute occupation counts
 
-this might not be using the occupation totals dataset to exclude not disclosed.
+excluding not disclosed and unkown qualification levels.
 ```{r}
 occupation_counts <- occupation_studylevel %>% filter(
     !i_standard_highest_qual_code %in% c(97, 99)
