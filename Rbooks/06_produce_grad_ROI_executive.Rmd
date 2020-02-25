@@ -53,7 +53,7 @@ top_occupations_1 <- grad_cube2 %>% mutate(
     mutate(
         occupationRank = 1:n(),
         rankText = nth(v = occupationRank, first_value =  "top occupation", second_value = '2nd occupation'),
-        field_id = paste0(narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
+        field_id = paste0(narrow_field_code, ' ' , narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
     ) %>%
 filter(occupationRank <= 30) %>% select(
     field_id, narrow_field_code, narrow_field_text, i_standard_highest_qual_code, occupationRank, rankText, occupation
@@ -62,7 +62,9 @@ head(top_occupations_1)
 ```
 
 ```{r}
-top_occupations_2 <- top_occupations_1 %>% ungroup() %>% select(-c(occupationRank, narrow_field_text, i_standard_highest_qual_code)) %>% pivot_wider(values_from = occupation, names_from = "rankText")
+top_occupations_2 <- top_occupations_1 %>% ungroup() %>% 
+    select(-c(occupationRank, narrow_field_text)) %>% 
+    pivot_wider(id_cols = c("field_id", "narrow_field_code", "i_standard_highest_qual_code"), values_from = occupation, names_from = "rankText")
 head(top_occupations_2)
 ```
 
@@ -73,9 +75,48 @@ field_of_study_totals <- read_excel("../input_data/t3b - Occupation by narrow fi
 head(field_of_study_totals)
 ```
 
+## Read field of study income
+```{r}
+consolidated_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "consolidated_income")) %>%
+    mutate(age_when_better_off = ifelse(ever_better_off, age_when_better_off, "NEVER"))
+head(consolidated_income)
+```
+
+Need to do conversions of id columns to match
+Then rename columns as desired (possibly use spaces?)
+```{r}
+income_table <- consolidated_income %>% mutate(narrow_field_code = substr(Field_Text,1,4)) %>%
+    rename(
+        i_standard_highest_qual_code = level_code,
+        `Avg Fulltime Annual Income 30-39 Yr Olds` = ft_30_39_annual_income,
+        `Total Fulltime Employed 30-39 Yr Olds` = ft_30_39_people_count,
+        `Avg Annual Income for all 30-29 Yr Olds` = all_30_39_annual_income,
+        `Total Employed all 30-39 Yr Olds` = all_30_39_people_count,
+        `Avg Annual Income for 20-65+ Yr Olds Fulltime Only` = ft_sd_annual_income,
+        `Avg Annual Income for 20-65+ Yr Olds Fulltime & Part Time` = all_sd_annual_income,
+        `Total Employed 20-65+ Yr Olds Fulltime Only` = ft_people_count,
+        `Total Employed 20-65+ Yr Olds Fulltime & Part Time` = all_people_count,
+        `Additional lifetime earnings above a school leaver 20-65+` = lifetime_above_school_leaver,
+        `Whole of life NPV for grads at Lvl 4 & above in full time employment 20-65+` = discounted_lifetime_above_school_leaver,
+        `Age when better off as a graduate (NPV) Lvl 4+ only` = age_when_better_off,
+        `NPV of income tax paid to Govt above school leaver` = npv_tax_over_school_leaver
+    ) %>% select(-c(
+        discounted_lifetime_income,
+        offset_lifetime_income,
+        lifetime_tax,
+        tax_above_school_leaver,
+        people_count_all_ages,
+        ever_better_off
+    )) 
+
+head(income_table)
+```
+
 
 ```{r}
-top_occupations_3 <- top_occupations_2 %>% left_join(field_of_study_totals) %>% select(field_id, narrow_field_code, people_count, everything())
+top_occupations_3 <- income_table %>% right_join(top_occupations_2, by=c("narrow_field_code", "i_standard_highest_qual_code")) %>% 
+
+    select(-Field_Text) %>% select(field_id, narrow_field_code, i_standard_highest_qual_code, everything())
 head(top_occupations_3)
 ```
 
@@ -85,7 +126,7 @@ dbWriteTable(go_analysis_con, name = "top_occupations", top_occupations_3, overw
 ```
 
 ```{r}
-top_occupations_4 <- top_occupations_3 %>% t %>% as.data.frame(stringsAsFactors = FALSE)
+top_occupations_4 <- top_occupations_3 %>% select(-i_standard_highest_qual_code) %>% t %>% as.data.frame(stringsAsFactors = FALSE) 
 head(top_occupations_4)
 ```
 
@@ -125,6 +166,7 @@ occupation_totals <- read_excel("../input_data/t3 - Occupation by field of study
 head(occupation_totals)
 ```
 
+
 ```{r}
 top_fields_3 <- top_fields_2 %>% 
     left_join(typical_study_levels) %>% 
@@ -147,12 +189,29 @@ head(degree_keys)
 
 ```{r}
 occupation_cross_ref_table <- grad_cube2 %>% mutate(
-    field_id = paste0(narrow_field_code, ' ', narrow_field_text, '[lvl-', i_standard_highest_qual_code, ']')
+    field_id = paste0(narrow_field_code, ' ', narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
 ) %>%
     pivot_wider(id_cols = c(occupation_text, i_occupation_code), names_from = field_id, values_from = people_count) %>%
-    arrange(occupation_text) %>% left_join(degree_keys)
+    arrange(occupation_text) %>% left_join(degree_keys) %>% select(-i_occupation_code)
 head(occupation_cross_ref_table)
 ```
+
+```{r}
+occupation_cross_ref_table_1 <- grad_cube2 %>% mutate(
+    field_id = paste0(narrow_field_code, ' ', narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
+) %>% arrange(occupation_text) %>%
+    pivot_wider(id_cols = field_id, names_from = occupation_text, values_from = people_count) %>%
+    arrange(field_id) %>%
+    full_join(top_occupations_3 %>% rename(`Narrow Field of Study` = field_id), by=c("field_id" = "Narrow Field of Study"))
+head(occupation_cross_ref_table_1)
+```
+
+```{r}
+occupation_table_5 <- occupation_cross_ref_table_1 %>% select(-i_standard_highest_qual_code) %>% t %>% as.data.frame(stringsAsFactors = FALSE) 
+head(occupation_table_5)
+tail(occupation_table_5)
+```
+
 
 ```{r}
 field_level_cross_ref_table <- grad_cube2 %>% mutate(
@@ -179,6 +238,8 @@ addWorksheet(wb, field_of_study_cross_name)
 
 wb
 ```
+
+
 
 ```{r}
 primary_occupation_output <- top_fields_4
@@ -221,7 +282,7 @@ addStyle(wb, occupation_sheet_name, openxlsx::createStyle(textDecoration = "bold
 ```
 
 ```{r}
-primary_field_of_study_output <- top_occupations_4
+primary_field_of_study_output <- occupation_table_5 # top_occupations_4
 openxlsx::writeData(wb,field_of_study_sheet_name,primary_field_of_study_output, rowNames=TRUE, colNames = FALSE)
 ```
 
@@ -230,14 +291,15 @@ colRange <- 2:(ncol(primary_field_of_study_output)+1)
 rowRange <- 2:(nrow(primary_field_of_study_output)+1)
 
 freezePane(wb, field_of_study_sheet_name, firstActiveRow = 2,  firstActiveCol = 2)
-setColWidths(wb, field_of_study_sheet_name, cols = colRange, widths = '16')
+
 addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE), rows = rowRange, cols = colRange, gridExpand = TRUE)
 
 addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecoration = "bold"), rows = 1, cols = colRange, gridExpand = TRUE)
 
 # Set left pane:
 setColWidths(wb, field_of_study_sheet_name, cols = colRange, widths = '23')
-addStyle(wb, field_of_study_sheet_name, createStyle(textDecoration = "bold"), rows = rowRange, cols = 1, gridExpand = TRUE)
+setColWidths(wb, field_of_study_sheet_name, cols = 1, widths = '30')
+addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecoration = "bold"), rows = rowRange, cols = 1, gridExpand = TRUE)
 ```
 
 ```{r}
