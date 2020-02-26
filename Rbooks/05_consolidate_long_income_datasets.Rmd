@@ -25,11 +25,12 @@ income_30_39 <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_ann
 head(income_30_39)
 ```
 
+#Convert to wide form, with employment status as columns
 ```{r}
 income_30_39 %>% pivot_wider(id_cols = c(Field_Text, level_code), names_from = "employed_code", values_from = c("mean_income", "people_count"), names_prefix = "emp_")
 ```
 
-### Fulltime and part-time collumns
+### Renaming columns as Fulltime and All, removing part-time data
 ```{r}
 income_30_39_ready <- income_30_39 %>% pivot_wider(id_cols = c(Field_Text, level_code), names_from = "employed_code", values_from = c("mean_income", "people_count"), names_prefix = "emp_") %>%
     rename(
@@ -42,13 +43,12 @@ income_30_39_ready <- income_30_39 %>% pivot_wider(id_cols = c(Field_Text, level
 head(income_30_39_ready)
 ```
 
-## Age Standardised income
+## Performing same operations as above to age-standardised income data
 ```{r}
 income_sd <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_inc_age_sd_annual"))
 head(income_sd)
 ```
 
-### Fulltime and part-time collumns
 ```{r}
 income_sd_ready <- income_sd %>% pivot_wider(id_cols = c(Field_Text, level_code), names_from = "employed_code", values_from = c("age_sd_income", "people_count"), names_prefix = "emp_") %>%
     rename(

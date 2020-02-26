@@ -27,7 +27,7 @@ grad_outcomes_datacube <- read_excel("../input_data/t3b - Occupation by narrow f
 head(grad_outcomes_datacube)
 ```
 
-
+#Adjusting format of columns, bringing in text variables for occupating and narrow field of study
 ```{r}
 grad_cube2 <- grad_outcomes_datacube %>% mutate(i_occupation_code = as.character(i_occupation_code)) %>% 
     append_ANZSCO_L5_txt(code_var = "i_occupation_code", ANZSCO_var = "occupation_text") %>%
@@ -62,6 +62,7 @@ filter(occupationRank <= 30) %>% select(
 head(top_occupations_1)
 ```
 
+Converting to wide form, with 30 columns for each top occupation for each qual
 ```{r}
 top_occupations_2 <- top_occupations_1 %>% ungroup() %>% 
     select(-c(occupationRank, narrow_field_text)) %>% 
@@ -69,6 +70,7 @@ top_occupations_2 <- top_occupations_1 %>% ungroup() %>%
 head(top_occupations_2)
 ```
 
+#Getting number of people for each field of study, with correct format
 ```{r}
 field_of_study_totals <- read_excel("../input_data/t3b - Occupation by narrow field of study- Checked.xlsx", sheet="narrow field of study totals", skip = 5, col_types = c('numeric','numeric', 'numeric')) %>%
     filter(set_code == 1) %>% mutate(narrow_field_code = formatC(narrow_field_code, width = 4, format = "d", flag = "0") ) %>%
@@ -113,7 +115,7 @@ income_table <- consolidated_income %>% mutate(narrow_field_code = substr(Field_
 head(income_table)
 ```
 
-
+Getting top occupations
 ```{r}
 top_occupations_3 <- income_table %>% right_join(top_occupations_2, by=c("narrow_field_code", "i_standard_highest_qual_code")) %>% 
 
@@ -121,17 +123,18 @@ top_occupations_3 <- income_table %>% right_join(top_occupations_2, by=c("narrow
 head(top_occupations_3)
 ```
 
-
+Saving table to database
 ```{r}
 dbWriteTable(go_analysis_con, name = "top_occupations", top_occupations_3, overwrite = TRUE)
 ```
 
+Transposing table
 ```{r}
 top_occupations_4 <- top_occupations_3 %>% select(-i_standard_highest_qual_code) %>% t %>% as.data.frame(stringsAsFactors = FALSE) 
 head(top_occupations_4)
 ```
 
-# get top 25 field/levels
+# Now getting most common fields of study by occupation
 ```{r}
 top_fields_1 <- grad_cube2 %>% mutate(
     field_id = paste('lvl', i_standard_highest_qual_code, narrow_field_text),
@@ -260,7 +263,8 @@ field_level_cross_ref_table <- grad_cube2 %>% mutate(
 head(field_level_cross_ref_table)
 ```
 
-# Output excel
+# Outputting to Excel workbook
+##Lots of Excel formatting follows
 ```{r}
 wb <- createWorkbook('Scott Henwood @ Universities NZ')
 # sheet names
