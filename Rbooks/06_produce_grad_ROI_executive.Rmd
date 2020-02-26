@@ -3,6 +3,7 @@ title: "Generate Graduate ROI Executive"
 output: html_notebook
 ---
 
+The main goal of this notebook is to create an excel workbook containing a couple of sheets used by the excutive director (Chris) to answer ad-hoc queries.
 
 ```{r}
 library(tidyverse)
@@ -187,6 +188,8 @@ degree_keys <- read_excel("../metadata/degree_key_lookup.xlsx") %>% select(-occu
 head(degree_keys)
 ```
 
+
+
 ```{r}
 occupation_cross_ref_table <- grad_cube2 %>% mutate(
     field_id = paste0(narrow_field_code, ' ', narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
@@ -202,14 +205,49 @@ occupation_cross_ref_table_1 <- grad_cube2 %>% mutate(
 ) %>% arrange(occupation_text) %>%
     pivot_wider(id_cols = field_id, names_from = occupation_text, values_from = people_count) %>%
     arrange(field_id) %>%
-    full_join(top_occupations_3 %>% rename(`Narrow Field of Study` = field_id), by=c("field_id" = "Narrow Field of Study"))
+    add_column( # columns to add space between the grad cube and top occupations
+        BLANK1 = NA,
+        BLANK2 = NA,
+        BLANK3 = NA,
+        BLANK4 = NA,
+        BLANK5 = NA,
+        BLANK6 = NA,
+        BLANK7 = NA,
+        BLANK8 = NA,
+        BLANK9 = NA,
+        BLANK10 = NA
+    ) %>%
+    full_join(top_occupations_3 %>% rename(`Narrow Field of Study` = field_id) %>% mutate(field_id = `Narrow Field of Study`), by=c("field_id"))
 head(occupation_cross_ref_table_1)
 ```
 
+## Add degree keys to fields at top sheet
 ```{r}
-occupation_table_5 <- occupation_cross_ref_table_1 %>% select(-i_standard_highest_qual_code) %>% t %>% as.data.frame(stringsAsFactors = FALSE) 
+occupation_table_5 <- occupation_cross_ref_table_1 %>% 
+    select(-i_standard_highest_qual_code) %>% 
+    t %>% as.data.frame(stringsAsFactors = FALSE) %>%
+    rownames_to_column("id") %>% 
+    mutate(
+        id = ifelse(startsWith(id, "BLANK"), NA, id)
+    ) %>% left_join(degree_keys %>% append_ANZSCO_L5_txt(code_var = "i_occupation_code", ANZSCO_var = "id") %>% select(-i_occupation_code) %>% filter(!is.na(id)), by="id")
+occupation_table_5$degree_key[1] <- "Degree Keys"
 head(occupation_table_5)
 tail(occupation_table_5)
+```
+
+
+```{r} 
+
+```
+
+
+```{r}
+occupation_table_5 %>% rownames_to_column("id") %>% 
+    mutate(
+        id = ifelse(startsWith(id, "BLANK"), NA, id)
+    ) %>% 
+    filter(is.na(id)) %>%
+    head()
 ```
 
 
@@ -228,12 +266,10 @@ wb <- createWorkbook('Scott Henwood @ Universities NZ')
 # sheet names
 occupation_sheet_name <- "Top 30 Qualifications"
 field_of_study_sheet_name <- "Top 25 Jobs"
-occupation_cross_name <- "occupation by field of study"
 field_of_study_cross_name <- "field of study by occupation"
 # creating worksheets
 addWorksheet(wb, occupation_sheet_name)
 addWorksheet(wb, field_of_study_sheet_name)
-addWorksheet(wb, occupation_cross_name)
 addWorksheet(wb, field_of_study_cross_name)
 
 wb
@@ -283,7 +319,7 @@ addStyle(wb, occupation_sheet_name, openxlsx::createStyle(textDecoration = "bold
 
 ```{r}
 primary_field_of_study_output <- occupation_table_5 # top_occupations_4
-openxlsx::writeData(wb,field_of_study_sheet_name,primary_field_of_study_output, rowNames=TRUE, colNames = FALSE)
+openxlsx::writeData(wb,field_of_study_sheet_name,primary_field_of_study_output, rowNames=FALSE, colNames = FALSE)
 ```
 
 ```{r}
@@ -303,7 +339,6 @@ addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecorati
 ```
 
 ```{r}
-writeData(wb,occupation_cross_name,occupation_cross_ref_table, rowNames=FALSE, colNames = TRUE)
 writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
 openxlsx::saveWorkbook(wb, '../working_outputs/Occupation by Field of Study Analysis 2.xlsx', overwrite = T)
 ```
