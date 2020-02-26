@@ -11,6 +11,7 @@ library(dbplyr)
 library(DBI)
 library(readxl)
 library(openxlsx)
+library(foreach)
 source("../scripts/unz_common.R")
 ```
 
@@ -146,7 +147,7 @@ top_fields_1 <- grad_cube2 %>% mutate(
     mutate(
         fieldRank = 1:n(),
         rankText = nth(v = fieldRank, first_value =  "top field of study", second_value = '2nd field of study'),
-        occupation_id = paste(i_occupation_code, occupation_text)
+        occupation_id = paste(occupation_text)
     ) %>%
 filter(fieldRank <= 30) %>% ungroup() %>%
 select(occupation_id, i_occupation_code, occupation_text, field, fieldRank, rankText)
@@ -176,7 +177,7 @@ top_fields_3 <- top_fields_2 %>%
     left_join(typical_study_levels) %>% 
     left_join(occupation_totals) %>% 
     
-    select(occupation_id, i_occupation_code, occupation_text, people_count, typical_study, everything()) %>% select(-c(occupation_text, i_occupation_code))
+    select(occupation_id, i_occupation_code, occupation_text, people_count, typical_study, everything()) %>% select(-c(occupation_text))
 head(top_fields_3)
 ```
 
@@ -201,7 +202,7 @@ occupation_cross_ref_table <- grad_cube2 %>% mutate(
     arrange(occupation_text) %>% left_join(degree_keys) %>% select(-i_occupation_code)
 head(occupation_cross_ref_table)
 ```
-
+## Build field of study at top sheet
 ```{r}
 occupation_cross_ref_table_1 <- grad_cube2 %>% mutate(
     field_id = paste0(narrow_field_code, ' ', narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
@@ -224,7 +225,7 @@ occupation_cross_ref_table_1 <- grad_cube2 %>% mutate(
 head(occupation_cross_ref_table_1)
 ```
 
-## Add degree keys to fields at top sheet
+### Add degree keys
 ```{r}
 occupation_table_5 <- occupation_cross_ref_table_1 %>% 
     select(-i_standard_highest_qual_code) %>% 
@@ -244,15 +245,8 @@ tail(occupation_table_5)
 ```
 
 
-```{r}
-occupation_table_5 %>% rownames_to_column("id") %>% 
-    mutate(
-        id = ifelse(startsWith(id, "BLANK"), NA, id)
-    ) %>% 
-    filter(is.na(id)) %>%
-    head()
-```
 
+## Build occupation at top sheet table
 
 ```{r}
 field_level_cross_ref_table <- grad_cube2 %>% mutate(
@@ -262,9 +256,50 @@ field_level_cross_ref_table <- grad_cube2 %>% mutate(
     arrange(narrow_field_code)
 head(field_level_cross_ref_table)
 ```
+top_fields_3
+```{r}
+field_level_cross_ref_table_1a <- grad_cube2 %>% 
+    mutate(
+        occupation_id = paste0(occupation_text),
+        field_id = paste0(narrow_field_code, ' ', narrow_field_text, ' [lvl-', i_standard_highest_qual_code, ']')
+    ) %>% arrange(field_id) %>%
+    pivot_wider(id_cols = occupation_id, names_from = field_id, values_from = people_count) %>%
+    arrange(occupation_id) %>%
+    add_column( # columns to add space between the grad cube and top occupations
+        BLANK1 = NA,
+        BLANK2 = NA,
+        BLANK3 = NA,
+        BLANK4 = NA,
+        BLANK5 = NA,
+        BLANK6 = NA,
+        BLANK7 = NA,
+        BLANK8 = NA,
+        BLANK9 = NA,
+        BLANK10 = NA
+    )
+print(ncol(field_level_cross_ref_table_1a))
+field_level_cross_ref_table_1 <- field_level_cross_ref_table_1a %>% 
+    full_join(
+        top_fields_3 %>% 
+            rename(`30 Most Common Qualifications for each Job Title for people aged 30-39` = occupation_id) %>%
+            mutate(occupation_id = `30 Most Common Qualifications for each Job Title for people aged 30-39`), 
+        by="occupation_id"
+    )
+head(field_level_cross_ref_table_1)
+```
+
+```{r}
+occupation_top_table <- field_level_cross_ref_table_1 %>% t %>% as.data.frame(stringsAsFactors = FALSE) %>%
+    rownames_to_column("id") %>% 
+    mutate(
+        id = ifelse(startsWith(id, "BLANK"), NA, id)
+    )
+head(occupation_top_table)
+tail(occupation_top_table)
+```
 
 # Outputting to Excel workbook
-##Lots of Excel formatting follows
+## Lots of Excel formatting follows
 ```{r}
 wb <- createWorkbook('Scott Henwood @ Universities NZ')
 # sheet names
@@ -282,13 +317,26 @@ wb
 
 
 ```{r}
-primary_occupation_output <- top_fields_4
-writeData(wb,occupation_sheet_name,primary_occupation_output, rowNames=TRUE, colNames = FALSE)
+primary_occupation_output <- occupation_top_table # top_fields_4
+writeData(wb,occupation_sheet_name,primary_occupation_output, rowNames=FALSE, colNames = FALSE)
 ```
 
 ```{r}
+apply_top_conditional_formating_study_level = function(standard_args, typical_study_text, colour) {
+    conditionalFormatting(
+        standard_args$wb, 
+        standard_args$sheet, 
+        standard_args$colRange, 
+        standard_args$row, 
+        rule=paste0(standard_args$ts_selector, '="', typical_study_text, '"'), 
+        style = openxlsx::createStyle(bgFill = colour)
+    )
+}
+
+
+topPartRowCount = ncol(field_level_cross_ref_table_1a)
 colRange <- 2:(ncol(primary_occupation_output)+1)
-rowRange <- 4:(nrow(primary_occupation_output)+3)
+rowRange <- (topPartRowCount+4):(nrow(primary_occupation_output)+3)
 #Freeze panes
 freezePane(wb, occupation_sheet_name, firstActiveRow = 2,  firstActiveCol = 2)
 # apply conditional formating
@@ -302,24 +350,40 @@ addStyle(wb, occupation_sheet_name, openxlsx::createStyle(wrapText =TRUE), rows 
 
 #apply conditional formating for occupation row
 typical_study_row = 3
-conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="School"'), style = openxlsx::createStyle(bgFill = "#bf8f00"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Cert/Dipl"'), style = openxlsx::createStyle(bgFill = "#b4c6e7"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Mixed"'), style = openxlsx::createStyle(bgFill = "#ededed"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Tertiary"'), style = openxlsx::createStyle(bgFill = "#92d050"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, 1, rule=paste0('INDIRECT(ADDRESS(ROW()+',typical_study_row-1,',COLUMN()))="Degree"'), style = openxlsx::createStyle(bgFill = "#00ff00"))
+common_arguments <- list(
+    wb = wb,
+    sheet = occupation_sheet_name,
+    colRange = colRange,
+    row = topPartRowCount + 1,
+    ts_selector = 'INDIRECT(ADDRESS(ROW()+3,COLUMN()))'
+)
+
+typical_study_level_colour_map <- list(
+    list(level="School", colour = "#bf8f00"),
+    list(level = "Cert/Dipl", colour = "#b4c6e7"),
+    list(level = "Mixed", colour = "#ededed"),
+    list(level = "Tertiary", colour = "#92d050"),
+    list(level = "Degree", colour = "#00ff00")
+)
+
+foreach(study_colour = typical_study_level_colour_map) %do%
+    apply_top_conditional_formating_study_level(common_arguments, study_colour$level, study_colour$colour)
+
+
 #apply static formatting
-addStyle(wb, occupation_sheet_name, openxlsx::createStyle(wrapText =TRUE, textDecoration = "bold"), rows = 1, cols = colRange, gridExpand = TRUE)
+addStyle(wb, occupation_sheet_name, openxlsx::createStyle(wrapText =TRUE, textDecoration = "bold"), rows = topPartRowCount + 1, cols = colRange, gridExpand = TRUE)
 
+common_arguments$row <- topPartRowCount + 4
+common_arguments$ts_selector <- 'INDIRECT(ADDRESS(ROW(),COLUMN()))'
 
-conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="School"', style = openxlsx::createStyle(bgFill = "#bf8f00"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Cert/Dipl"', style = openxlsx::createStyle(bgFill = "#b4c6e7"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Mixed"', style = openxlsx::createStyle(bgFill = "#ededed"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Tertiary"', style = openxlsx::createStyle(bgFill = "#92d050"))
-conditionalFormatting(wb, occupation_sheet_name, colRange, typical_study_row, rule='INDIRECT(ADDRESS(ROW(),COLUMN()))="Degree"', style = openxlsx::createStyle(bgFill = "#00ff00"))
+foreach(study_colour = typical_study_level_colour_map) %do%
+    apply_top_conditional_formating_study_level(common_arguments, study_colour$level, study_colour$colour)
+
 # style first collumn
-setColWidths(wb, occupation_sheet_name, cols = 1, widths = '23')
-addStyle(wb, occupation_sheet_name, openxlsx::createStyle(textDecoration = "bold"), rows = rowRange, cols = 1, gridExpand = TRUE)
+setColWidths(wb, occupation_sheet_name, cols = 1, widths = '46')
+addStyle(wb, occupation_sheet_name, openxlsx::createStyle(textDecoration = "bold", wrapText = TRUE), rows = rowRange, cols = 1, gridExpand = TRUE)
 ```
+
 
 ```{r}
 primary_field_of_study_output <- occupation_table_5 # top_occupations_4
@@ -343,6 +407,6 @@ addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecorati
 ```
 
 ```{r}
-writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
+#writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
 openxlsx::saveWorkbook(wb, '../working_outputs/Occupation by Field of Study Analysis 2.xlsx', overwrite = T)
 ```
