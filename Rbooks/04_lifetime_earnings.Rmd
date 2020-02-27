@@ -188,7 +188,7 @@ Calculating difference in earnings and tax for each qual from baseline
 ```{r}
 components_calculated <- tax_calculated %>% left_join (baseline_income, by="age") %>%
     mutate(
-        above_school_leaver = offset_income - baseline_income,
+        above_school_leaver = offset_income - baseline_income - loan_repayments,
         tax_paid_above_school_leaver = tax - baseline_tax
     )
 
