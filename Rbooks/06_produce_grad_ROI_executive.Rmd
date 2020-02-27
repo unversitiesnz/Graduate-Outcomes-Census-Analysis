@@ -300,11 +300,9 @@ wb <- createWorkbook('Scott Henwood @ Universities NZ')
 # sheet names
 occupation_sheet_name <- "Top 30 Qualifications"
 field_of_study_sheet_name <- "Top 25 Jobs"
-field_of_study_cross_name <- "field of study by occupation"
 # creating worksheets
 addWorksheet(wb, occupation_sheet_name)
 addWorksheet(wb, field_of_study_sheet_name)
-addWorksheet(wb, field_of_study_cross_name)
 
 wb
 ```
@@ -376,7 +374,7 @@ foreach(study_colour = typical_study_level_colour_map) %do%
 
 # style first collumn
 setColWidths(wb, occupation_sheet_name, cols = 1, widths = '46')
-addStyle(wb, occupation_sheet_name, openxlsx::createStyle(textDecoration = "bold", wrapText = TRUE), rows = rowRange, cols = 1, gridExpand = TRUE)
+addStyle(wb, occupation_sheet_name, openxlsx::createStyle(textDecoration = "bold", wrapText = TRUE), cols = 1, rows = 1:(nrow(primary_occupation_output)+3), gridExpand = TRUE)
 ```
 
 
