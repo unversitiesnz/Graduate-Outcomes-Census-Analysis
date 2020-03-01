@@ -3,7 +3,7 @@ title: "Generate Graduate ROI Executive"
 output: html_notebook
 ---
 
-The main goal of this notebook is to create an excel workbook containing a couple of sheets used by the excutive director (Chris) to answer ad-hoc queries.
+The main goal of this notebook is to create an excel workbook containing a couple of sheets used by the executive director (Chris) to answer ad-hoc queries.
 
 ```{r}
 library(tidyverse)
@@ -28,7 +28,7 @@ grad_outcomes_datacube <- read_excel("../input_data/t3b - Occupation by narrow f
 head(grad_outcomes_datacube)
 ```
 
-#Adjusting format of columns, bringing in text variables for occupating and narrow field of study
+#Adjusting format of columns, bringing in text variables for occupation and narrow field of study
 ```{r}
 grad_cube2 <- grad_outcomes_datacube %>% mutate(i_occupation_code = as.character(i_occupation_code)) %>% 
     append_ANZSCO_L5_txt(code_var = "i_occupation_code", ANZSCO_var = "occupation_text") %>%
@@ -202,6 +202,7 @@ occupation_cross_ref_table <- grad_cube2 %>% mutate(
     arrange(occupation_text) %>% left_join(degree_keys) %>% select(-i_occupation_code)
 head(occupation_cross_ref_table)
 ```
+
 ## Build field of study at top sheet
 ```{r}
 occupation_cross_ref_table_1 <- grad_cube2 %>% mutate(
@@ -239,13 +240,6 @@ head(occupation_table_5)
 tail(occupation_table_5)
 ```
 
-
-```{r} 
-
-```
-
-
-
 ## Build occupation at top sheet table
 
 ```{r}
@@ -256,6 +250,7 @@ field_level_cross_ref_table <- grad_cube2 %>% mutate(
     arrange(narrow_field_code)
 head(field_level_cross_ref_table)
 ```
+
 top_fields_3
 ```{r}
 field_level_cross_ref_table_1a <- grad_cube2 %>% 

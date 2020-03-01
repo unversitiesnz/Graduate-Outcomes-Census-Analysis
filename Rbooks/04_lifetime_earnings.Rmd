@@ -139,13 +139,19 @@ head(income_with_fees)
 tax_calculated <- income_with_fees %>% group_by(field, level) %>% arrange(age) %>% 
     mutate( #Offset income = income, unless younger than minimum qual completion age
         offset_income = ifelse(is.na(duration_whole_yr), gross_income, ifelse(age < 17 + duration_whole_yr, 0, gross_income)),
-        loan_repayments = ifelse( # ??? Unsure about this code
-            cumsum(offset_income * 0.12) - (offset_income * 0.12) >= loan_at_graduation, 
-            0,
-            ifelse(cumsum(offset_income * 0.12) >= loan_at_graduation,
-                   loan_at_graduation - (cumsum(offset_income * 0.12) - (offset_income * 0.12)),
-                   (offset_income * 0.12)
-                   )
+         #Loan payments are 12% of all income over $19760/year
+        offset_income_loanable = ifelse(offset_income < 19760, 0, (offset_income-19760)),
+        loan_repayments = ifelse(
+          offset_income < 19760, 0, ifelse(
+            #If loan payments up till now have covered loan, repayment = 0
+            (cumsum(offset_income_loanable*0.12) - (offset_income_loanable*0.12)) >= loan_at_graduation, 0, ifelse(
+              #Otherwise, if this year's payment will be more than enough, repayment = remaining amount
+              cumsum(offset_income_loanable*0.12) >= loan_at_graduation, 
+              (loan_at_graduation - (cumsum(offset_income_loanable*0.12)-(offset_income_loanable*0.12))), 
+              #Otherwise, repayment = 12%
+              0.12*offset_income_loanable
+            )
+          )
         )
         
     ) %>% 
@@ -182,7 +188,7 @@ Calculating difference in earnings and tax for each qual from baseline
 ```{r}
 components_calculated <- tax_calculated %>% left_join (baseline_income, by="age") %>%
     mutate(
-        above_school_leaver = offset_income - baseline_income,
+        above_school_leaver = offset_income - baseline_income - loan_repayments,
         tax_paid_above_school_leaver = tax - baseline_tax
     )
 
