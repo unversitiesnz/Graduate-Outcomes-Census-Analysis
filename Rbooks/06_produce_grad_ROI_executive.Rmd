@@ -120,7 +120,7 @@ Getting top occupations
 ```{r}
 top_occupations_3 <- income_table %>% right_join(top_occupations_2, by=c("narrow_field_code", "i_standard_highest_qual_code")) %>% 
 
-    select(-Field_Text) %>% select(field_id, narrow_field_code, i_standard_highest_qual_code, everything())
+    select(-Field_Text) %>% select(field_id, narrow_field_code, i_standard_highest_qual_code, everything()) %>% select(-narrow_field_code)
 head(top_occupations_3)
 ```
 
@@ -406,5 +406,5 @@ addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecorati
 
 ```{r}
 #writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
-openxlsx::saveWorkbook(wb, '../working_outputs/Occupation by Field of Study Analysis 2.xlsx', overwrite = T)
+openxlsx::saveWorkbook(wb, '../working_outputs/Graduate ROI Occupation by Field of Study.xlsx', overwrite = T)
 ```
