@@ -17,7 +17,7 @@ source("../scripts/unz_common.R")
 go_analysis_con <- connect_to_GO_analysis_database()
 go_analysis_con
 ```
-
+Limit data to people with standard qualifications who did not earn nothing or make a loss.
 ```{r}
 data <- dbGetQuery(go_analysis_con, "SELECT *
   FROM [lng].[cen_annual_avg_income]
@@ -35,7 +35,7 @@ head(missing_count)
 ```
 
 ## convert income data to wide with age as columns:
-The age columns must be in sequnce for this to work, the index of the age columns are manually defined and will result in highly undesirable behavour if they move.
+The age columns must be in sequence for this to work, the index of the age columns are manually defined and will result in highly undesirable behaviour if they move.
 ```{r}
 age_cols <- 6:16
 
@@ -57,22 +57,26 @@ should_impute <- wide_form %>% left_join(missing_count, by=c("employed_code","fi
                 (is.na(age_25_29) & is.na(age_30_34) & is.na(age_35_39) & is.na(age_40_44)) |
                 (is.na(age_30_34) & is.na(age_35_39) & is.na(age_40_44) & is.na(age_45_49)) |
                 (is.na(age_35_39) & is.na(age_40_44) & is.na(age_45_49) & is.na(age_50_54)) |
-                # Can't impute if there is a run of three missing between 50 and 65
+                # Can't impute if there is a run of three missing between 50 and 65+
                 (is.na(age_50_54) & is.na(age_55_59) & is.na(age_60_64)) |
                 (is.na(age_55_59) & is.na(age_60_64) & is.na(age_65_))
             )
-          )
+    )
 head(should_impute)
 ```
 
 # Do imputation:
 ## prep fuller for age 15-19 by level
+
+#NB: Re, getting imputation incomes for 15-19 year olds by employment status with quals 8 and above by using max incomes for levels < 8: used for calculating lifetime earnings of what people WOULD have been earning.
 ```{r}
+###Getting weighted means by qual level and occupation across fields of study, for levels < 8, using maximum as imputation value for levels >=8
 level_15_19_mean_incomes <- data %>% 
     filter(age == "15-19 years" & !is.na(mean_income) & !level_code %in% c('08', '09', '10')) %>% 
     group_by(employed_code, level_code) %>% 
     summarise(weighted_mean_income = weighted.mean(mean_income, people_count), people_count = sum(people_count))
 print(level_15_19_mean_incomes)
+
 ### imputation value for level 8+
 higher_level_early_income_impute <- (level_15_19_mean_incomes %>% summarise(weighted_mean_income = max(weighted_mean_income)))
 higher_level_early_income_impute
@@ -82,7 +86,7 @@ higher_level_imputes <- tibble(employed_code = c(rep(1,3), rep(2,3), rep(3,3)), 
 higher_level_imputes <- higher_level_imputes %>% left_join(higher_level_early_income_impute, by="employed_code")
 higher_level_imputes
 
-### bind together the level 1 - 6 dataset with level 7 - 10
+### bind together the level 1 - 6 dataset with level 7 - 10 (rounding earlier < 8 incomes and removing counts)
 age_15_19_imputable_income <- rbind(level_15_19_mean_incomes %>% ungroup() %>% select(c("employed_code","level_code","weighted_mean_income")), higher_level_imputes)  %>%
     mutate(mean_income = round2(weighted_mean_income, -2)) %>% select(-c("weighted_mean_income"))
 age_15_19_imputable_income
@@ -196,6 +200,7 @@ colnames(age_value_matrix %>% t)
 
 ## Convert to long format and tibble
 ```{r}
+#Data is in wide format. Age brackets are replaced with individual ages 17-65
 yearly_gross_income_long <- age_value_matrix %>% t %>% as_tibble %>% 
     select(-c(age_lookup$age_names, "age_65_")) %>%
     pivot_longer(cols = -c(employed_code, level_code, level, field_code, field), names_to = "age", values_to = "gross_income") %>%

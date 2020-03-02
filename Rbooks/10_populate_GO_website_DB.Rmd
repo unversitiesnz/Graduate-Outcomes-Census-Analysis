@@ -1,0 +1,342 @@
+---
+title: "Populate GO website database"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(DBI)
+library(readxl)
+```
+
+## Database connections
+```{r}
+go_analysis_con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "SQL Server", 
+                      Server = "localhost\\SQLEXPRESS",
+                      Database = "GO_Analysis_Data",
+                      Trusted_Connection = "True")
+go_analysis_con
+
+go_web_con_old <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "SQL Server", 
+                      Server = "localhost\\SQLEXPRESS",
+                      Database = "GradOutcomesNZv4-1",
+                      Trusted_Connection = "True")
+go_web_con_old
+
+go_web_con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "SQL Server", 
+                      Server = "localhost\\SQLEXPRESS",
+                      Database = "GradOutcomesNZv5-0",
+                      Trusted_Connection = "True")
+go_web_con
+```
+
+## Populate Broad field of study table
+```{r}
+dbWriteTable(go_web_con, name = "BroadFieldOfStudy",  
+                read_xlsx("../metadata/NZSCED_broad_cen.xlsx", skip = 7) %>%
+                    mutate(Code = strtoi(Code, base = 10L)) %>%
+                    rename(ClassificationTitle = Descriptor, BroadFieldOfStudyCode = Code)
+             , append = TRUE)
+```
+
+## Populate Narrow field of study table
+```{r}
+field_of_study_people_counts <- dbReadTable(go_analysis_con, DBI::Id(schema = "lng", table = "narrow_field_of_study_people_counts"))
+head(field_of_study_people_counts)
+```
+
+```{r}
+field_of_study_people_counts %>% filter(is.na(field_code))
+```
+
+```{r}
+dbWriteTable(go_web_con, name = "NarrowFieldOfStudy",  
+                field_of_study_people_counts %>%
+                 filter(!is.na(TotalPeopleCount), !is.na(field_code)) %>%
+                 mutate(NarrowFieldOfStudyCode = strtoi(field_code, base = 10L), BroadFieldOfStudyCode = strtoi(substring(field_code, 1,2), base = 10L)) %>%
+                 rename(ClassificationTitle = field) %>%
+                 select(NarrowFieldOfStudyCode, BroadFieldOfStudyCode, ClassificationTitle, TotalPeopleCount)
+             , append = TRUE)
+```
+
+## Populate Narrow field of study level table
+```{r}
+# using study requirements numbers from old database.
+study_requirements <- dbReadTable(go_web_con_old, "FieldOfStudyStaircasing") %>% 
+    select(-c(Id)) %>%
+    mutate(NarrowFieldOfStudyCode = formatC(NarrowFieldOfStudyCode, width = 4, flag = '0')) %>%
+    rename(StudyRequirementsKey = StaircasingCode)
+head(study_requirements)
+```
+
+```{r}
+lifetime_earnings_data <- dbReadTable(go_analysis_con, DBI::Id(schema = "lng", table = "cen_lifetime_income2")) %>%
+    mutate(NarrowFieldOfStudyCode = substring(Field_Text, 1, 4), NZQALevel = strtoi(level_code, base = 10L), EarnedAboveSchoolLeaver = as.integer(lifetime_above_school_leaver)) %>%
+    select(NarrowFieldOfStudyCode, NZQALevel, EarnedAboveSchoolLeaver) %>%
+    filter(NZQALevel != 11, NZQALevel > 3)
+head(lifetime_earnings_data)
+```
+
+```{r}
+narrow_field_of_study_level <- annual_income_table %>% select(NarrowFieldOfStudyCode, NZQALevel) %>% distinct() %>%
+    left_join(study_requirements) %>%
+    left_join(lifetime_earnings_data) %>%
+    mutate(StudyRequirementsKey = ifelse(is.na(StudyRequirementsKey), -1, StudyRequirementsKey)) 
+head(narrow_field_of_study_level, 20)
+tail(narrow_field_of_study_level)
+```
+
+```{r}
+dbWriteTable(go_web_con, name = "NarrowFieldOfStudyLevel", narrow_field_of_study_level %>% filter(!is.na(NZQALevel)), append = TRUE)
+```
+
+## Populate Annual Income table
+
+```{r}
+fulltime_30_39_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_3_avg_income_30_39")) %>% mutate(EmploymentTypeKey = 1L, AgeBandKey = 1L)
+head(fulltime_30_39_income)
+```
+
+```{r}
+fulltime_30_39_income_all <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_3_income_30_39_all"))  %>% mutate(EmploymentTypeKey = 2L, AgeBandKey = 1L)
+head(fulltime_30_39_income_all)
+```
+
+```{r}
+annual_income_table <- fulltime_30_39_income %>% rbind(fulltime_30_39_income_all) %>% 
+    mutate(
+        NZQALevel = strtoi(level_code, base = 10L),
+        PeopleCount = as.integer(people_count),
+        Income = as.integer(mean_income),
+        NarrowFieldOfStudyCode = substring(Field_Text, 1, 4)
+    ) %>%
+    select(
+        NarrowFieldOfStudyCode,
+        NZQALevel,
+        EmploymentTypeKey,
+        AgeBandKey,
+        Income,
+        PeopleCount
+    )
+
+head(annual_income_table)
+```
+
+```{r}
+dbWriteTable(go_web_con, name = "AnnualIncome", annual_income_table, append = TRUE)
+```
+
+# Populate ANZSCO reference tables
+```{r}
+anzscoL1 <- read_excel("../metadata/AZNSCO_Level1.xlsx", skip = 7) %>% rename(Level1ANZSCOCode = Code, ClassificationTitle = Descriptor)
+head(anzscoL1)
+dbWriteTable(go_web_con, name = "ANZSCOOccupationL1", anzscoL1, append = TRUE)
+```
+
+```{r}
+anzscoL2 <- read_excel("../metadata/AZNSCO_Level2.xlsx", skip = 7) %>% rename(Level2ANZSCOCode = Code, ClassificationTitle = Descriptor) %>% mutate(Level1ANZSCOCode = substring(Level2ANZSCOCode, 1,1))
+head(anzscoL2)
+dbWriteTable(go_web_con, name = "ANZSCOOccupationL2", anzscoL2, append = TRUE)
+```
+
+```{r}
+anzscoL3 <- read_excel("../metadata/AZNSCO_Level3.xlsx", skip = 7) %>% rename(Level3ANZSCOCode = Code, ClassificationTitle = Descriptor) %>% mutate(Level2ANZSCOCode = substring(Level3ANZSCOCode, 1,2))
+head(anzscoL3)
+dbWriteTable(go_web_con, name = "ANZSCOOccupationL3", anzscoL3, append = TRUE)
+```
+
+```{r}
+anzscoL4 <- read_excel("../metadata/AZNSCO_Level4.xlsx", skip = 7) %>% rename(Level4ANZSCOCode = Code, ClassificationTitle = Descriptor) %>% mutate(Level3ANZSCOCode = substring(Level4ANZSCOCode, 1,3))
+head(anzscoL4)
+dbWriteTable(go_web_con, name = "ANZSCOOccupationL4", anzscoL4, append = TRUE)
+```
+
+## Populate ANZSCO L5 table
+
+Need: people count & typical study level.
+
+`public enum TypicalStudyLevel
+{
+    School = 1, CertDipl = 2, Mixed = 3, Tertiary = 4, Degree = 5
+}`
+
+```{r}
+not_working <- tibble(Level5ANZSCOCode = c('999003', '999004'), ClassificationTitle = c('Unemployed', 'Not in Labour Force'))
+anzscoL5 <- read_excel("../metadata/ANZSCO_Level5.xlsx", skip = 7) %>% 
+    rename(Level5ANZSCOCode = Code, ClassificationTitle = Descriptor) %>% 
+    rbind(not_working) %>%
+    mutate(
+        Level1ANZSCOCode = substring(Level5ANZSCOCode, 1,1),
+        Level2ANZSCOCode = substring(Level5ANZSCOCode, 1,2),
+        Level3ANZSCOCode = substring(Level5ANZSCOCode, 1,3),
+        Level4ANZSCOCode = substring(Level5ANZSCOCode, 1,4)
+        
+    )
+head(anzscoL5)
+```
+
+```{r}
+typical_study_levels <- dbReadTable(go_analysis_con, name = "typical_study_levels") %>%
+    rename(TypicalStudyLevelKey = typical_study, Level5ANZSCOCode = i_occupation_code) %>%
+    mutate(Level5ANZSCOCode = as.character(Level5ANZSCOCode))
+head(typical_study_levels)
+```
+
+```{r}
+retired_codes <- anzscoL5 %>% filter(ClassificationTitle == "Code retired")
+head(retired_codes)
+```
+
+```{r}
+occupation_table_a <- read_excel("../input_data/t3 - Occupation by field of study - Checked.xlsx", sheet="Occupation totals", skip = 4, col_types = c('text', 'numeric')) %>%
+    rename(Level5ANZSCOCode = i_occupation_code, TotalPeopleCount = people_count) %>% right_join(anzscoL5) %>% left_join(typical_study_levels) %>%
+    filter(ClassificationTitle != "Code retired")
+head(occupation_table_a)
+```
+
+```{r}
+# leave typical study level for later
+dbWriteTable(go_web_con, name = "ANZSCOOccupationL5", occupation_table_a, append = TRUE)
+```
+
+# Populate vocational pathways
+
+## Populate reference table
+```{r}
+vocational_pathway_table <- data.frame(
+    VocationalPathwayId = 1:6,
+    PathwayName = c("Construction and Infrastructure", "Manufacturing and Technology", "Primary Industries", 
+                           "Service Industries", "Social and Community Services", "Creative Industries"),
+    PathwayLink = c(
+        "https://youthguarantee.education.govt.nz/initiatives/vocational-pathways/learning-and-working-in-construction-and-infrastructure-industries/", 
+        "https://youthguarantee.education.govt.nz/initiatives/vocational-pathways/learning-and-working-in-manufacturing-and-technology-industries/",
+        "https://youthguarantee.education.govt.nz/initiatives/vocational-pathways/learning-and-working-in-the-primary-industries/",
+        "https://youthguarantee.education.govt.nz/initiatives/vocational-pathways/learning-and-working-in-the-service-industries/",
+        "https://youthguarantee.education.govt.nz/initiatives/vocational-pathways/learning-and-working-in-social-and-community-service-industries/",
+        "https://youthguarantee.education.govt.nz/initiatives/vocational-pathways/learning-and-working-in-the-creative-industries/"
+    ),
+    stringsAsFactors = FALSE
+
+)
+vocational_pathway_table
+```
+
+```{r}
+dbWriteTable(go_web_con, name = "VocationalPathway", vocational_pathway_table, append = TRUE)
+```
+
+## Load vocational pathway to occupation mappings
+
+```{r}
+vocational_pathway_map_wide = read_excel("../metadata/VocationalPathwayMap.xlsx") %>% select(-c("ANZSCO group code", "X__1"))
+head(vocational_pathway_map_wide)
+```
+
+```{r}
+vocational_pathway_map_long = vocational_pathway_map_wide %>% pivot_longer(cols = -c(Title, ANZSCO_code), names_to = "pathway_text", values_to = "is_pathway") %>%
+    mutate(is_pathway = !is.na(is_pathway)) %>% filter(is_pathway, !ANZSCO_code %in% retired_codes$Level5ANZSCOCode)
+
+head(vocational_pathway_map_long)
+```
+
+```{r}
+v_pathway2 = vocational_pathway_map_long %>% left_join (vocational_pathway_table, by=c("pathway_text" = "PathwayName"))
+head(v_pathway2)
+```
+
+```{r}
+v_pathway_table = v_pathway2 %>% rename(Level5ANZSCOCode = ANZSCO_code) %>% select(Level5ANZSCOCode, VocationalPathwayId)
+head(v_pathway_table)
+```
+
+```{r}
+dbWriteTable(go_web_con, name = "ANZSCOOccupationL5VocationalPathway", v_pathway_table, append = TRUE)
+```
+
+## Populate Careers NZ table
+
+
+```{r}
+career_table = read_csv("../datasets/anzsco_careers_links.csv") %>% rename(Level5ANZSCOCode = Code, CareerLink = Link) %>%
+    mutate(CareerLinkEnabled = TRUE) %>% select(Level5ANZSCOCode, Description, CareerLinkEnabled, CareerLink) %>% filter(!is.na(CareerLink))
+head(career_table)
+```
+
+```{r}
+occuapations = dbReadTable(go_web_con, name="ANZSCOOccupationL5")
+head(occuapations)
+```
+
+```{r}
+# temp untill new data avrives
+career_table2 = career_table %>% mutate(Level5ANZSCOCode = as.integer(Level5ANZSCOCode)) %>% filter(Level5ANZSCOCode %in% occuapations$Level5ANZSCOCode)
+```
+
+```{r}
+dbWriteTable(go_web_con, name = "CareersNZInfo", career_table2, append = TRUE)
+```
+
+
+# Populate ANZSCOOccupationL5NarrowFieldOfStudy
+
+```{r}
+grad_outcomes_datacube <- read_excel("../input_data/t3b - Occupation by narrow field of study- checked.xlsx", sheet = "Occupation by narrow study", skip=4)
+head(grad_outcomes_datacube)
+```
+
+
+
+```{r}
+grad_outcomes_datacube2 <- grad_outcomes_datacube %>% rename(
+    Level5ANZSCOCode = i_occupation_code,
+    NarrowFieldOfStudyCode = narrow_field_code,
+    NZQALevel = i_standard_highest_qual_code,
+    People = people_count
+)
+head(grad_outcomes_datacube2)
+```
+
+```{r}
+# remove residuals
+grad_outcomes_datacube3 <- grad_outcomes_datacube2 %>% 
+    filter(
+        !NZQALevel %in% c(97, 99),
+        NarrowFieldOfStudyCode < 3333
+    )
+head(grad_outcomes_datacube3)
+```
+
+```{r}
+dbWriteTable(
+    go_web_con, 
+    name = "ANZSCOOccupationL5NarrowFieldOfStudy", 
+    grad_outcomes_datacube3,
+    append = TRUE
+)
+```
+
+## Populate alternative occupation field of study table
+
+```{r}
+TestDb <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "SQL Server", 
+                      Server = "localhost\\SQLEXPRESS",
+                      Database = "TestDb",
+                      Trusted_Connection = "True")
+TestDb
+```
+
+```{r}
+dbWriteTable(
+    go_web_con, 
+    name = "ANZSCOOccupationL5NarrowFieldOfStudyAlternative", 
+    dbReadTable(TestDb, name="ANZSCOOccupationL5NarrowFieldOfStudyAlternative") %>% filter(Level5ANZSCOCode > 3, !Level5ANZSCOCode %in% retired_codes$Level5ANZSCOCode) %>% select(-c(Id)),
+    append = TRUE
+)
+```
+

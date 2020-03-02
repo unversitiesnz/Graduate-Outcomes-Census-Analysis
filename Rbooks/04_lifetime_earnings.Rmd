@@ -1,6 +1,9 @@
 ---
 title: "Lifetime income analysis"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
 ---
 
 
@@ -28,7 +31,8 @@ source("../scripts/compute_age_standard_income.R")
 source("../scripts/cross_tabulation.R")
 ```
 
-## define functions to output data 
+## Defining functions to output data 
+One for all qual levels, one for levels 4 to 10
 ```{r}
 # for outputting a table into for all study levels
 # requires: level_code, Field_Text
@@ -41,10 +45,7 @@ output_field_levels_all <- function(.data, con, value_var, table_name) {
     return(.data)
 }
 
-# for outputting a table into for all study levels
-# requires: level_code, Field_Text
-# accepts long format
-# chainable
+# Levels 4-10
 output_field_levels_l4_l10 <- function(.data, con, value_var, table_name) {
     tabulated_income_b <- .data %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = value_var) %>%
         select(Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
@@ -55,12 +56,13 @@ output_field_levels_l4_l10 <- function(.data, con, value_var, table_name) {
 ```
 
 ## Connect to analysis database
-
 ```{r}
 go_analysis_con <- connect_to_GO_analysis_database()
 go_analysis_con
 ```
+
 ## Load Data
+Getting combined full-time and part-time data (employed_code)
 ```{r}
 employed_code = '2'
 yearly_gross_income_long <- dbGetQuery(go_analysis_con, paste0("SELECT *
@@ -116,7 +118,7 @@ simplistic_lifetime_earnings %>%
 # Get fee estimates
 
 ```{r}
-fees_and_funding <- read.csv("../datasets/fees_durations_SAC.csv") %>% mutate(
+fees_and_funding <- read.csv("../program_costs/fees_durations_SAC.csv") %>% mutate(
   level_code = formatC(level_code, width = 2, flag = "0"),
   field_code = formatC(field_code, width = 4, flag = "0")
   
@@ -135,19 +137,25 @@ head(income_with_fees)
 
 ```{r}
 tax_calculated <- income_with_fees %>% group_by(field, level) %>% arrange(age) %>% 
-    mutate(
+    mutate( #Offset income = income, unless younger than minimum qual completion age
         offset_income = ifelse(is.na(duration_whole_yr), gross_income, ifelse(age < 17 + duration_whole_yr, 0, gross_income)),
+         #Loan payments are 12% of all income over $19760/year
+        offset_income_loanable = ifelse(offset_income < 19760, 0, (offset_income-19760)),
         loan_repayments = ifelse(
-            cumsum(offset_income * 0.12) - (offset_income * 0.12) >= loan_at_graduation, 
-            0,
-            ifelse(cumsum(offset_income * 0.12) >= loan_at_graduation,
-                   loan_at_graduation - (cumsum(offset_income * 0.12) - (offset_income * 0.12)),
-                   (offset_income * 0.12)
-                   )
+          offset_income < 19760, 0, ifelse(
+            #If loan payments up till now have covered loan, repayment = 0
+            (cumsum(offset_income_loanable*0.12) - (offset_income_loanable*0.12)) >= loan_at_graduation, 0, ifelse(
+              #Otherwise, if this year's payment will be more than enough, repayment = remaining amount
+              cumsum(offset_income_loanable*0.12) >= loan_at_graduation, 
+              (loan_at_graduation - (cumsum(offset_income_loanable*0.12)-(offset_income_loanable*0.12))), 
+              #Otherwise, repayment = 12%
+              0.12*offset_income_loanable
+            )
+          )
         )
         
     ) %>% 
-    mutate(
+    mutate( # Calculating tax paid each year using marginal tax rates
         current_loan = loan_at_graduation - cumsum(loan_repayments),
         tax = ifelse(
             offset_income <= 14000, 
@@ -166,7 +174,7 @@ tax_calculated <- income_with_fees %>% group_by(field, level) %>% arrange(age) %
 head(tax_calculated)
 ```
 
-
+Calculating baseline tax and income for each year for a school leaver with no post-school qualification
 ```{r}
 baseline_income <- tax_calculated %>% 
     filter(field_code == "0000", level_code == "00") %>%
@@ -176,10 +184,11 @@ baseline_income <- tax_calculated %>%
 head(baseline_income)
 ```
 
+Calculating difference in earnings and tax for each qual from baseline
 ```{r}
 components_calculated <- tax_calculated %>% left_join (baseline_income, by="age") %>%
     mutate(
-        above_school_leaver = offset_income - baseline_income,
+        above_school_leaver = offset_income - baseline_income - loan_repayments,
         tax_paid_above_school_leaver = tax - baseline_tax
     )
 
@@ -188,9 +197,14 @@ head(components_calculated)
 
 
 
-# Calculate NPV
+# Calculating Net Present Value (NPV)
+
+NPV = COST OF INVESTMENT - SUM(PRESENT VALUE RETURN FOR EACH TIME PERIOD)
+PRESENT VALUE RETURN FOR EACH TIME PERIOD = VALUE * (1/(1+inflation rate))^no. periods
+
+or, discounted_income_tax_paid_above_school_leaver_m_sac = tax_paid_above_school_leaver_m_sac * (v ^ t),
 ```{r}
-i <- 0.03
+i <- 0.03 #Discount rate or return that could be made from alternative investment (in this case, not paying SAC funding) = INFLATION RATE = 3%
 v <- 1 / (1+i)
 print(c(i,v))
 npv_calculated <- components_calculated %>% 
@@ -266,6 +280,8 @@ summarised_lifetime_income %>%
     head()
 ```
 
+
+Finding age at which graduates are better off financially than school-leavers, by finding the year at which npv_over_school_leaver becomes positive
 ```{r}
 age_when_better_off <- npv_calculated %>% mutate(
     better_off = ifelse(lag(npv_over_school_leaver) <= 0 & npv_over_school_leaver > 0, TRUE, FALSE),
@@ -298,3 +314,11 @@ dbWriteTable(go_analysis_con, Id(schema = "tab", table = paste0("cen_age_better_
 npv_calculated %>% filter(field_code == "0201", level_code == "07") %>%
     select(age, gross_income)
 ```
+
+# Output age when better off in long format
+```{r}
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "age_better_off"), age_when_better_off)
+
+```
+
+Potential further analysis: look at age at which government is better off (i.e. SAC funding has paid off in increased tax revenue from higher-earning graduates)

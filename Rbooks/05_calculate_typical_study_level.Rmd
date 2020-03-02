@@ -1,0 +1,125 @@
+---
+title: "Calculate Typical Study Level"
+output: html_notebook
+---
+
+inline code? `r "test"`
+
+The objective of this notebook is to calculate the typical study level of individuals in different occupations.
+
+This is done by calculating how many individuals are at different levels, making that a proportion and adding them together to see if any of the groups are met.
+
+The groups are (in this order):
+
+* school (level 0 - 3)
+* certificates and diplomas (level 4 - 6) - CURRENTLY APPLIES TO NO OCCUPATIONS
+* degree (level 7+)
+* tertiary (level 4+)
+* mixed (if none of the above selected)
+
+
+# Setup
+## Libs
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(DBI)
+library(readxl)
+```
+
+
+## Read occupation file
+```{r}
+occupation_studylevel <- read_excel("../input_data/t3 - Occupation by field of study - Checked.xlsx", sheet="Occupation by level totals", skip = 4)
+head(occupation_studylevel)
+```
+
+## compute occupation counts
+
+Excluding not disclosed and unknown qualification levels.
+```{r}
+occupation_counts <- occupation_studylevel %>% filter(
+    !i_standard_highest_qual_code %in% c(97, 99)
+) %>% group_by(i_occupation_code) %>%
+    summarise(occupation_people_count = sum(people_count))
+head(occupation_counts)
+```
+
+## pivot occupation by study level (converting to wide format)
+```{r}
+occupation_studylevel_wide <- occupation_studylevel %>% pivot_wider(names_from = i_standard_highest_qual_code, names_prefix = "lvl_", values_from = people_count)
+head(occupation_studylevel_wide)
+```
+
+## calculate how many are at different study level groups
+```{r}
+result <- occupation_studylevel_wide %>%
+        group_by(i_occupation_code) %>%
+        mutate(school = sum(lvl_0, lvl_1, lvl_2, lvl_3, lvl_11, na.rm = TRUE), 
+               cert_dip = sum(lvl_5, na.rm = TRUE),
+               degree_or_higher = sum(lvl_7, lvl_8, lvl_9, lvl_10, na.rm = TRUE), 
+               tertiary = sum(lvl_4, lvl_5, lvl_7, lvl_8, lvl_9, lvl_10, na.rm = TRUE)
+              ) %>% ungroup()
+head(result)
+```
+
+## merge with occupation counts and check proportions for the study level groups
+True or false indicators for whether the occupation is dominated by people with a certain (grouped) qualification level, using 85% and 90% thresholds
+```{r}
+standard_threshold <- 0.85
+conditions_applied <- result %>% inner_join(occupation_counts) %>%
+    mutate(
+        school_yes = school / occupation_people_count > standard_threshold,
+        cert_dip_yes = cert_dip / occupation_people_count > standard_threshold,
+        degree_or_higher_yes = degree_or_higher / occupation_people_count > standard_threshold,
+        tertiary_yes = tertiary / occupation_people_count > 0.90
+    )
+head(conditions_applied)
+```
+
+NOTE: Currently no qualifications have cert_dips as dominant level of study
+
+## Using a prioritied method asign a typical study level classification number to each occupation
+
+1 = school
+2 = certificates and diplomas
+3 = mixed
+4 = tertiary
+5 = degree
+```{r}
+typical_study_levels <- conditions_applied %>%
+    mutate(
+        typical_study = ifelse(
+            school_yes,
+            1,
+            ifelse(
+                cert_dip_yes,
+                2,
+                ifelse(
+                    degree_or_higher_yes,
+                    5,
+                    ifelse(
+                        tertiary_yes,
+                        4,
+                        3
+                    )
+                )
+            )
+        )
+    ) %>% select(i_occupation_code, typical_study)
+head(typical_study_levels)
+```
+
+## Connect to analysis database
+
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+
+## Write typical study levels table to database
+```{r}
+dbWriteTable(go_analysis_con, name = "typical_study_levels",  
+                typical_study_levels
+             , overwrite = TRUE)
+```

@@ -1,14 +1,15 @@
 # R files which change often
 .Rproj.user
+.Rhistory
+.RData
 *.nb.html
+*.html
 *.log
-
+*.knit.md
+*.utf8.md
 # the data should not be in source control
 working_outputs
 datasets
 input_data
-metadata
-program_costs
-
 # the documents should be kept on sharepoint, not under source control
 *.docx

@@ -1,0 +1,148 @@
+---
+title: "Age Standard Income"
+output:
+  html_document:
+    df_print: paged
+---
+
+Constuct age standard income. I don't know why doing this is being done, not really.
+
+The *age bands* are *added* together using weights from the working population age distribution. I don't know how this should be interpreted, but it was done last time, so I *assume* the approach is valid.
+
+# Setup
+
+## Load libraries and scripts
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(DBI)
+
+source("../scripts/unz_common.R")
+source("../scripts/impute_income.R")
+source("../scripts/compute_age_standard_income.R")
+
+source("../scripts/cross_tabulation.R")
+```
+
+## Connect to analysis database
+
+```{r}
+go_analysis_con <- connect_to_GO_analysis_database()
+go_analysis_con
+```
+
+## Read dataset
+```{r}
+data <- dbGetQuery(go_analysis_con, "SELECT *
+  FROM [lng].[cen_annual_avg_income]
+  where set_standard = 1")
+head(data)
+```
+
+## Read imputed dataset
+```{r}
+annual_income_with_imputation <- dbReadTable(go_analysis_con, Id(schema = "wide", table = "cen_annual_income_with_imputation"))
+head(annual_income_with_imputation)
+```
+
+
+## convert imputed income dataset to long by age
+```{r}
+income_long <- annual_income_with_imputation %>% filter(can_impute == TRUE) %>%
+    select(-c(Total, missing_count, can_impute, age_15_19_impute_income)) %>%
+    pivot_longer(names_to = 'age', values_to = 'mean_income',
+        cols = c(age_15_19, age_20_24, 
+                 age_25_29, age_30_34, 
+                 age_35_39, age_40_44, 
+                 age_45_49, age_50_54,
+                 age_55_59, age_60_64, age_65_
+                )
+    ) %>%
+    filter(!is.na(mean_income)) %>%
+    mutate(employed_code = as.numeric(employed_code))
+head(income_long)
+```
+
+## define rename from column naming back to names with spaces
+Used to change the text to human readable for a column, also needed to make some joins work. 
+```{r}
+
+convert_to_unsafe_age <- c("age_15_19" = "15-19 years", "age_20_24" = "20-24 years",    
+"age_25_29" = "25-29 years", "age_30_34" = "30-34 years", "age_35_39" = "35-39 years",     
+"age_40_44" = "40-44 years", "age_45_49" = "45-49 years", "age_50_54" = "50-54 years",   
+"age_55_59" = "55-59 years", "age_60_64" = "60-64 years", "age_65_" = "65 years and over")
+
+
+convert_to_unsafe_age       
+```
+
+## Get the age distribution
+```{r}
+get_income_age_distribution <- function(.data) {
+    age_distribution <- .data %>% group_by(employed_code, age) %>% 
+        summarise(people_count = sum(people_count, na.rm = TRUE)) %>%
+        group_by(employed_code) %>%
+        mutate(proportion = people_count/sum(people_count, na.rm = TRUE))
+    return (age_distribution)
+}
+age_distribution <- data %>% select(-c(people_count)) %>% 
+    rename(people_count = people_count2) %>% 
+    filter(age != 'Total') %>% get_income_age_distribution()
+age_distribution
+```
+
+## Add age bracket %'s and new age names to long income data
+```{r}
+income_long %>% mutate(
+    age = convert_to_unsafe_age[age]
+) %>% left_join(age_distribution, by=c("employed_code", "age")) %>%
+group_by(employed_code, level_code, level, field_code, field)
+```
+
+## get people counts
+```{r}
+all_ft_people_counts <- data %>% select(-c(people_count)) %>% 
+    rename(people_count = people_count2) %>% 
+    filter(age != 'Total') %>%
+    group_by(employed_code, level_code, level, field_code, field) %>%
+    summarise(people_count = sum(people_count, na.rm = TRUE)) %>%
+    filter(people_count > 0)
+head(all_ft_people_counts)
+```
+
+# age standardise
+```{r}
+age_standard_income <- income_long %>% 
+    mutate(
+        age = convert_to_unsafe_age[age]
+    ) %>% left_join(age_distribution, by=c("employed_code", "age")) %>%
+    group_by(employed_code, level_code, level, field_code, field) %>%
+    summarise(age_sd_income = round2(weighted.mean(mean_income, proportion), -2)) %>%
+    left_join(all_ft_people_counts) %>%
+    mutate(Field_Text = paste(field_code, field)) %>%
+    filter(people_count >= 20)
+head(age_standard_income)
+```
+
+# Output data
+```{r}
+dbWriteTable(go_analysis_con, 
+             Id(schema = "lng", table = "cen_inc_age_sd_annual"), 
+             age_standard_income %>% ungroup() %>% select(employed_code, Field_Text, level_code, age_sd_income, people_count), 
+             overwrite = TRUE)
+```
+
+## output standardised income
+```{r}
+tabulated_income_a <- age_standard_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age_sd_income")
+print(tabulated_income_a)
+dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_inc_age_sd_annual"), tabulated_income_a, overwrite = TRUE)
+```
+
+## output people counts
+```{r}
+tabulated_counts <- age_standard_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "people_count")
+print(tabulated_counts)
+dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_inc_age_sd_annual_counts"), tabulated_counts, overwrite = TRUE)
+```
+
