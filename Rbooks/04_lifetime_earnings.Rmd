@@ -39,7 +39,7 @@ One for all qual levels, one for levels 4 to 10
 # accepts long format
 # chainable
 output_field_levels_all <- function(.data, con, value_var, table_name) {
-    tabulated_income_b <- .data %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = value_var)
+    tabulated_income_b <- .data %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = value_var)
     print(tabulated_income_b)
     dbWriteTable(con, Id(schema = "tab", table = table_name), tabulated_income_b, overwrite = TRUE)
     return(.data)
@@ -47,7 +47,7 @@ output_field_levels_all <- function(.data, con, value_var, table_name) {
 
 # Levels 4-10
 output_field_levels_l4_l10 <- function(.data, con, value_var, table_name) {
-    tabulated_income_b <- .data %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = value_var) %>%
+    tabulated_income_b <- .data %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = value_var) %>%
         select(Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
     print(tabulated_income_b)
     dbWriteTable(con, Id(schema = "tab", table = table_name), tabulated_income_b, overwrite = TRUE)
@@ -65,9 +65,8 @@ go_analysis_con
 Getting combined full-time and part-time data (employed_code)
 ```{r}
 employed_code = '2'
-yearly_gross_income_long <- dbGetQuery(go_analysis_con, paste0("SELECT *
-  FROM [lng].[cen_yearly_gross_income]
-  where employed_code = ", employed_code))
+yearly_gross_income_long <- dbGetQuery(go_analysis_con, "SELECT *
+  FROM [lng].[cen_yearly_gross_income]")
 head(yearly_gross_income_long)
 ```
 
@@ -75,12 +74,16 @@ head(yearly_gross_income_long)
 
 The yearly income dataset does not contain people counts, so it is being obtained from a different table
 ```{r}
-total_people_counts <- dbGetQuery(go_analysis_con, paste0("SELECT
-      [level_code]
+total_people_counts <- dbGetQuery(go_analysis_con, "SELECT
+      employed_code, [level_code]
       ,[field], field_code
 ,[people_count2]
   FROM [GO_Analysis_Data].[lng].[cen_annual_avg_income]
-  where age = 'Total' and people_count > 0 and set_standard = 1 and employed_code = ", employed_code)) %>% rename(people_count_all_ages = people_count2) %>% mutate(Field_Text = paste(field_code, field)) %>%
+  where age = 'Total' and people_count > 0 and set_standard = 1") %>% rename(people_count_all_ages = people_count2) %>% 
+  mutate(
+    Field_Text = paste(field_code, field),
+    employed_code = as.character(employed_code)
+  ) %>%
     select(-c(field, field_code))
 head(total_people_counts)
 ```
@@ -98,7 +101,7 @@ Simple in that it does not remove fees from the total income
 ```{r}
 # simple gross lifetime incomes
 simplistic_lifetime_earnings <- yearly_gross_income_long %>% filter(age >= 18, level != "Overseas Secondary School Qualification") %>%
-    group_by(field, level_code) %>%
+    group_by(employed_code, field, level_code) %>%
     summarise(simple_lifetime_income = sum(gross_income)) %>% 
     append_narrow_field_of_study_code(field_var = "field") %>% 
     mutate(Field_Text = paste(field_code, field))
@@ -136,7 +139,7 @@ head(income_with_fees)
 
 
 ```{r}
-tax_calculated <- income_with_fees %>% group_by(field, level) %>% arrange(age) %>% 
+tax_calculated <- income_with_fees %>% group_by(employed_code, field, level) %>% arrange(age) %>% 
     mutate( #Offset income = income, unless younger than minimum qual completion age
         offset_income = ifelse(is.na(duration_whole_yr), gross_income, ifelse(age < 17 + duration_whole_yr, 0, gross_income)),
          #Loan payments are 12% of all income over $19760/year
@@ -179,14 +182,14 @@ Calculating baseline tax and income for each year for a school leaver with no po
 baseline_income <- tax_calculated %>% 
     filter(field_code == "0000", level_code == "00") %>%
     ungroup() %>%
-    select(age, gross_income, tax) %>%
+    select(employed_code, age, gross_income, tax) %>%
     rename(baseline_income = gross_income, baseline_tax = tax)
 head(baseline_income)
 ```
 
 Calculating difference in earnings and tax for each qual from baseline
 ```{r}
-components_calculated <- tax_calculated %>% left_join (baseline_income, by="age") %>%
+components_calculated <- tax_calculated %>% left_join (baseline_income, by=c("employed_code", "age")) %>%
     mutate(
         above_school_leaver = offset_income - baseline_income - loan_repayments,
         tax_paid_above_school_leaver = tax - baseline_tax
@@ -239,7 +242,7 @@ head(npv_calculated)
 # Lifetime income
 ```{r}
 summarised_lifetime_income <- npv_calculated %>% mutate(Field_Text = paste(field_code, field)) %>% 
-    group_by(Field_Text, level_code) %>%
+    group_by(employed_code, Field_Text, level_code) %>%
     summarise(
         lifetime_above_school_leaver = sum(above_school_leaver), 
         discounted_lifetime_income = sum(discounted_income), 
@@ -255,7 +258,7 @@ head(summarised_lifetime_income)
 
 
 ```{r}
-dbWriteTable(go_analysis_con, Id(schema = "lng", table = paste0("cen_lifetime_income", employed_code)), 
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_lifetime_income"), 
              summarised_lifetime_income %>% filter(
                 ! (is.na(lifetime_above_school_leaver) & is.na(discounted_lifetime_income) & is.na(discounted_lifetime_above_school_leaver) & is.na(offset_lifetime_income) & is.na(lifetime_tax) & is.na(tax_above_school_leaver))
              ), 
@@ -263,7 +266,7 @@ dbWriteTable(go_analysis_con, Id(schema = "lng", table = paste0("cen_lifetime_in
 ```
 
 ```{r}
-tabulated_income_b <- summarised_lifetime_income %>% pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "lifetime_above_school_leaver")
+tabulated_income_b <- summarised_lifetime_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "lifetime_above_school_leaver")
 print(tabulated_income_b)
 dbWriteTable(go_analysis_con, Id(schema = "tab", table = paste0("cen_lifetime_earnings_above_school_leaver", employed_code)), tabulated_income_b, overwrite = TRUE)
 ```
@@ -286,12 +289,12 @@ Finding age at which graduates are better off financially than school-leavers, b
 age_when_better_off <- npv_calculated %>% mutate(
     better_off = ifelse(lag(npv_over_school_leaver) <= 0 & npv_over_school_leaver > 0, TRUE, FALSE),
     Field_Text = paste(field_code, field)
-) %>% group_by(Field_Text, level_code) %>%
+) %>% group_by(employed_code, Field_Text, level_code) %>%
 arrange(Field_Text, level_code, desc(better_off), age) %>%
 mutate(
     fl_index = row_number()
 ) %>% filter(!is.na(better_off), fl_index == 1) %>% ungroup() %>%
-    select(Field_Text, level_code, age, better_off) %>%
+    select(employed_code, Field_Text, level_code, age, better_off) %>%
     mutate(age = ifelse(!better_off, 99, age)) %>%
     arrange(Field_Text, level_code)
 
@@ -300,7 +303,7 @@ head(age_when_better_off)
 
 ```{r}
 tabulated_age_better_off <- age_when_better_off %>% 
-    pivot_wider(id_cols = c("level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age") %>%
+    pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age") %>%
     select(Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
 
 print(tabulated_age_better_off)
@@ -317,8 +320,12 @@ npv_calculated %>% filter(field_code == "0201", level_code == "07") %>%
 
 # Output age when better off in long format
 ```{r}
+<<<<<<< HEAD
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "age_better_off"), age_when_better_off, overwrite=TRUE)
 
+=======
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "age_better_off"), age_when_better_off, overwrite = TRUE)
+>>>>>>> 862706f30b9e2778e06c2eb1e04be06c421fc9e6
 ```
 
 Potential further analysis: look at age at which government is better off (i.e. SAC funding has paid off in increased tax revenue from higher-earning graduates)
