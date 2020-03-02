@@ -320,12 +320,7 @@ npv_calculated %>% filter(field_code == "0201", level_code == "07") %>%
 
 # Output age when better off in long format
 ```{r}
-<<<<<<< HEAD
-dbWriteTable(go_analysis_con, Id(schema = "lng", table = "age_better_off"), age_when_better_off, overwrite=TRUE)
-
-=======
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "age_better_off"), age_when_better_off, overwrite = TRUE)
->>>>>>> 862706f30b9e2778e06c2eb1e04be06c421fc9e6
 ```
 
 Potential further analysis: look at age at which government is better off (i.e. SAC funding has paid off in increased tax revenue from higher-earning graduates)
