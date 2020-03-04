@@ -338,7 +338,7 @@ narrow_nzsced["fieldOfStudy"] = narrow_nzsced.fieldOfStudy.apply(lambda x: re.su
 narrow_nzsced.head()
 
 
-## Remove enteries which have to useful data
+## Remove entries which have no useful data
 ```{python}
 data4 = course_dataset3[course_dataset3.fee.notnull() & (course_dataset3.fee != "N/A") & (course_dataset3.fee != "N/AN/A")]
 data4.head()

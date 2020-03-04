@@ -3,6 +3,8 @@ title: "Populate GO website database"
 output: html_notebook
 ---
 
+Acquires links to additional information regarding vocational pathways and career information from other websites and links these to our data.
+
 
 ```{r}
 library(tidyverse)
@@ -12,7 +14,8 @@ library(readxl)
 source("../scripts/unz_common.R")
 ```
 
-## Database connections
+## Database connections 
+(note that latter two databases have not been created in the codes thus far, currently only on Scott's computer)
 ```{r}
 go_analysis_con <- DBI::dbConnect(odbc::odbc(),
                       Driver = "SQL Server", 
@@ -28,6 +31,7 @@ go_web_con_old <- DBI::dbConnect(odbc::odbc(),
                       Trusted_Connection = "True")
 go_web_con_old
 
+#Database of empty tables which are then used to populate website
 go_web_con <- DBI::dbConnect(odbc::odbc(),
                       Driver = "SQL Server", 
                       Server = "localhost\\SQLEXPRESS",
@@ -327,7 +331,7 @@ head(occuapations)
 ```
 
 ```{r}
-# temp untill new data avrives
+# temp until new data avrives
 career_table2 = career_table %>% mutate(Level5ANZSCOCode = as.integer(Level5ANZSCOCode)) %>% filter(Level5ANZSCOCode %in% occuapations$Level5ANZSCOCode)
 ```
 
