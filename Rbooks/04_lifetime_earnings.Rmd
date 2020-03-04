@@ -64,7 +64,7 @@ go_analysis_con
 ## Load Data
 Getting combined full-time and part-time data (employed_code)
 ```{r}
-employed_code = '2'
+#employed_code = '2'
 yearly_gross_income_long <- dbGetQuery(go_analysis_con, "SELECT *
   FROM [lng].[cen_yearly_gross_income]")
 head(yearly_gross_income_long)
@@ -107,7 +107,7 @@ simplistic_lifetime_earnings <- yearly_gross_income_long %>% filter(age >= 18, l
     mutate(Field_Text = paste(field_code, field))
 head(simplistic_lifetime_earnings)
 simplistic_lifetime_earnings %>% 
-    output_field_levels_all(con = go_analysis_con, value_var = "simple_lifetime_income", table_name = paste0("cen_lifetime_earnings_a", employed_code))
+    output_field_levels_all(con = go_analysis_con, value_var = "simple_lifetime_income", table_name = "cen_lifetime_earnings_a")
 ```
 
 
@@ -268,18 +268,18 @@ dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_lifetime_income"),
 ```{r}
 tabulated_income_b <- summarised_lifetime_income %>% pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "lifetime_above_school_leaver")
 print(tabulated_income_b)
-dbWriteTable(go_analysis_con, Id(schema = "tab", table = paste0("cen_lifetime_earnings_above_school_leaver", employed_code)), tabulated_income_b, overwrite = TRUE)
+dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_lifetime_earnings_above_school_leaver"), tabulated_income_b, overwrite = TRUE)
 ```
 
 ```{r}
 summarised_lifetime_income %>%
-    output_field_levels_l4_l10(con = go_analysis_con, value_var = "lifetime_above_school_leaver", paste0("cen_lifetime_earnings_above_school_leaver", employed_code)) %>%
-    output_field_levels_l4_l10(con = go_analysis_con, value_var = "discounted_lifetime_income", paste0("cen_lifetime_discounted_earnings", employed_code)) %>%
-    output_field_levels_l4_l10(con = go_analysis_con, value_var = "discounted_lifetime_above_school_leaver", paste0("cen_lifetime_discounted_earnings_above_school_leaver", employed_code)) %>%
-    output_field_levels_l4_l10(con = go_analysis_con, value_var = "offset_lifetime_income", paste0("cen_lifetime_offset", employed_code)) %>%
-    output_field_levels_l4_l10(con = go_analysis_con, value_var = "lifetime_tax", paste0("cen_lifetime_tax", employed_code)) %>%
-    output_field_levels_l4_l10(con = go_analysis_con, value_var = "tax_above_school_leaver", paste0("cen_tax_above_school_leaver", employed_code)) %>%
-    output_field_levels_l4_l10(con = go_analysis_con, value_var = "npv_tax_over_school_leaver", paste0("cen_npv_tax_over_school_leaver", employed_code)) %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "lifetime_above_school_leaver", "cen_lifetime_earnings_above_school_leaver") %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "discounted_lifetime_income", "cen_lifetime_discounted_earnings") %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "discounted_lifetime_above_school_leaver", "cen_lifetime_discounted_earnings_above_school_leaver") %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "offset_lifetime_income", "cen_lifetime_offset") %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "lifetime_tax", "cen_lifetime_tax") %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "tax_above_school_leaver", "cen_tax_above_school_leaver") %>%
+    output_field_levels_l4_l10(con = go_analysis_con, value_var = "npv_tax_over_school_leaver", "cen_npv_tax_over_school_leaver") %>%
     head()
 ```
 
@@ -307,7 +307,7 @@ tabulated_age_better_off <- age_when_better_off %>%
     select(Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
 
 print(tabulated_age_better_off)
-dbWriteTable(go_analysis_con, Id(schema = "tab", table = paste0("cen_age_better_off", employed_code)), tabulated_age_better_off, overwrite = TRUE)
+dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_age_better_off"), tabulated_age_better_off, overwrite = TRUE)
 ```
 
 
