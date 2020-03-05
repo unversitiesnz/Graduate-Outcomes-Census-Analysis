@@ -304,7 +304,7 @@ head(age_when_better_off)
 ```{r}
 tabulated_age_better_off <- age_when_better_off %>% 
     pivot_wider(id_cols = c("employed_code", "level_code", "Field_Text"), names_from = level_code,names_prefix = "lvl ", values_from = "age") %>%
-    select(Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
+    select(employed_code, Field_Text, `lvl 04`, `lvl 05`, `lvl 07`, `lvl 08`, `lvl 09`, `lvl 10`)
 
 print(tabulated_age_better_off)
 dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_age_better_off"), tabulated_age_better_off, overwrite = TRUE)
