@@ -13,3 +13,4 @@ datasets
 input_data
 # the documents should be kept on sharepoint, not under source control
 *.docx
+~$*

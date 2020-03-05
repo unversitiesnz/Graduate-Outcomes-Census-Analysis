@@ -3,7 +3,7 @@ title: "Generate Graduate ROI Executive"
 output: html_notebook
 ---
 
-The main goal of this notebook is to create an excel workbook containing a couple of sheets used by the executive director (Chris) to answer ad-hoc queries.
+The main goal of this notebook is to create a formatted excel workbook containing a couple of sheets used by the executive director (Chris) to answer ad-hoc queries.
 
 ```{r}
 library(tidyverse)
@@ -82,14 +82,14 @@ head(field_of_study_totals)
 ## Read field of study income
 ```{r}
 consolidated_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "consolidated_income")) %>%
-    mutate(age_when_better_off = ifelse(ever_better_off, age_when_better_off, "NEVER"))
+    mutate(age_when_better_off = ifelse(ever_better_off, age_when_better_off, "NEVER")) %>% filter(employed_code == "1") %>% select(-employed_code)
 head(consolidated_income)
 ```
 
 Need to do conversions of id columns to match
 Then rename columns as desired (possibly use spaces?)
 ```{r}
-income_table <- consolidated_income %>% mutate(narrow_field_code = substr(Field_Text,1,4)) %>%
+income_table <- consolidated_income %>% mutate(narrow_field_code = substr(Field_Text,1,4), BLANK_A = NA) %>%
     rename(
         i_standard_highest_qual_code = level_code,
         `Avg Fulltime Annual Income 30-39 Yr Olds` = ft_30_39_annual_income,
@@ -120,7 +120,7 @@ Getting top occupations
 ```{r}
 top_occupations_3 <- income_table %>% right_join(top_occupations_2, by=c("narrow_field_code", "i_standard_highest_qual_code")) %>% 
 
-    select(-Field_Text) %>% select(field_id, narrow_field_code, i_standard_highest_qual_code, everything())
+    select(-Field_Text) %>% select(field_id, narrow_field_code, i_standard_highest_qual_code, everything()) %>% select(-narrow_field_code)
 head(top_occupations_3)
 ```
 
@@ -401,5 +401,5 @@ addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecorati
 
 ```{r}
 #writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
-openxlsx::saveWorkbook(wb, '../working_outputs/Occupation by Field of Study Analysis 2.xlsx', overwrite = T)
+openxlsx::saveWorkbook(wb, '../working_outputs/Graduate ROI Occupation by Field of Study.xlsx', overwrite = T)
 ```

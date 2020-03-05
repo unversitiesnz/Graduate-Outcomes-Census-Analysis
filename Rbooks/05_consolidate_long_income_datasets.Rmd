@@ -61,8 +61,10 @@ head(income_sd_ready)
 ```
 
 ## lifetime earnings datasets
+In this context only using fulltime employed
 ```{r}
-lifetime_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_lifetime_income2"))
+lifetime_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_lifetime_income")) %>% 
+    filter(employed_code == "1") %>% select(-employed_code)
 head(lifetime_income)
 ```
 
@@ -72,7 +74,7 @@ age_better_off <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "age_b
     rename(
         age_when_better_off = age,
         ever_better_off = better_off
-    )
+    ) %>% filter(employed_code == "1") %>% select(-employed_code)
 head(age_better_off)
 ```
 

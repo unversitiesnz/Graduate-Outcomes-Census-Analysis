@@ -544,6 +544,6 @@ sac_paid %>% filter(level_code == '07', field_code == '0201') %>% head(8)
 
 ## Save fee, duration and funding dataset
 ```{r}
-write.csv(sac_paid, "../program_costs/fees_durations_SAC.csv", row.names = FALSE) 
+write.csv(sac_paid, "../program_costs/fees_durations_SAC.csv", row.names = FALSE)
 ```
 
