@@ -3,7 +3,7 @@ title: "Screen Scrape Fees, Durations and SAC funding"
 output: html_notebook
 ---
 This code screen-scrapes the TEC and Careers websites
-
+QUESTION - Careers website does not have field of study for generic degrees, and its qual pages are provider specific. How do we get fees from these?
 
 
 # Commands to setup python in R notebooks
@@ -165,7 +165,7 @@ nzsced_sac_rates.to_csv("../program_costs/NZSCED_SAC_rates.csv")
 ```
 
 # ********************************************************
-# CAREERs NZ SCREEN SCRAPING of fees and durations
+# CAREERS NZ SCREEN SCRAPING of fees and durations
 # ********************************************************
 
 Screen must be wide enough for this to work, full desktop view.
