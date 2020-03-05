@@ -1,13 +1,15 @@
 ---
-title: "Screen Scrap Fees, Durations and SAC funding"
+title: "Screen Scrape Fees, Durations and SAC funding"
 output: html_notebook
 ---
+This code screen-scrapes the TEC and Careers websites
+
 
 
 # Commands to setup python in R notebooks
 
 When you run the first python chuck R will ask to install Miniconda. I would recommend that you do this.
-Once Minicoda is installed open (from the start menu) 'Anaconda Powershell Prompt (R-Mini)' run the following command
+Once Minicoda is installed, open (from the start menu) 'Anaconda Powershell Prompt (R-Mini)' and run the following command
 `conda activate r-reticulate`
 followed by the install commands.
 
@@ -42,16 +44,16 @@ import re
 
 # GET SAC FUNDING RATES:
 
-This process is more robust than the Careers NZ screen scrapping becuase all the required information is on a single page, in one table.
+This process is more robust than the Careers NZ screen-scraping becuase all the required information is on a single page, in one table.
 
 ## Start up webdriver and navigate to starting page
 
 If it breaks at this point you might need to obtain a copy of Chrome webdriver, The error message may give you instructions to install it, you could follow them.
 
-You can go to: https://chromedriver.chromium.org/downloads to download the webdriver. You will also need to have a somewhat upto date version of Chrome installed. 
+You can go to: https://chromedriver.chromium.org/downloads to download the webdriver. You will also need to have a somewhat up-to-date version of Chrome installed. 
 You will need to either:
 
-* include the ChromeDriver location in your PATH environment variable
+* include the ChromeDriver location in your PATH environment variable, or
 * include the path to ChromeDriver when instantiating webdriver.Chrome (`webdriver.Chrome('/path/to/chromedriver')`)
 
 
@@ -124,7 +126,7 @@ nzsced_map1.head()
 
 ```{python}
 nzsced_map1[nzsced_map1['NZSCED to SAC: SAC category and level'] == '0601 Medical Studies']
-# cells that where na are now NaN
+# cells that were na are now NaN
 ```
 
 ```{python}
@@ -163,7 +165,7 @@ nzsced_sac_rates.to_csv("../program_costs/NZSCED_SAC_rates.csv")
 ```
 
 # ********************************************************
-# CAREER NZ SCREEN SCRAPPING of fees and durations
+# CAREERs NZ SCREEN SCRAPING of fees and durations
 # ********************************************************
 
 Screen must be wide enough for this to work, full desktop view.
@@ -175,7 +177,7 @@ driver.get("https://www.careers.govt.nz/searchresults?tab=courses")
 ```
 
 
-## define functions to do the screen scrapping
+## define functions to do the screen scraping
 ```{python}
 # returns true there was a page to navigate to, false otherwise.
 def navigate_to_next_page(driver):    
@@ -224,11 +226,11 @@ def navigate_to_next_page(driver):
 
 ```
 
-# Running the webscrapping
-Webscrapping can take time, during the process a screen of chrome will run itself and navigate through pages on the Careers NZ website.
+# Running the web scraping
+Webscraping can take time, during the process a screen of chrome will run itself and navigate through pages on the Careers NZ website.
 It does not need to be kept in focus, nor does it need to use your mouse pointer (some other automation tools do). Just don't click on any links while it is running and it should hopefully work.
 
-## Web scrapping all links to courses on the Careers NZ site
+## Web scraping all links to courses on the Careers NZ site
 ## WARNING: this will take a while
 ```{python}
 driver.get("https://www.careers.govt.nz/searchresults?tab=courses")
@@ -243,7 +245,7 @@ pickle.dump(course_pages, f)
 f.close()
 ```
 
-## Web scrapping details from all the courses pages on the Careers NZ website
+## Web scraping details from all the courses pages on the Careers NZ website
 ## WARNING: this will take even longer (>hour)
 ```{python}
 def getCourseDetails(driver, url):
@@ -269,7 +271,7 @@ pickle.dump(course_dataset, f)
 f.close()
 ```
 
-# preforming post scrap actions
+# performing post-scrape actions
 ## convert field of study from type object to string.
 ```{python}
 course_dataset2 = course_dataset
@@ -277,7 +279,7 @@ course_dataset2["fieldOfStudy"] = course_dataset2["fieldOfStudy"] .astype('str')
 ```
 
 
-## do some data cleaning of the course dataset
+## do some cleaning of the course dataset
 ```{python}
 def extract_codes_from_url(url):
     codes = re.search("(?:view\/)(\w+)(?:\/)(\d\d\d\d)$",url)
@@ -338,7 +340,7 @@ narrow_nzsced["fieldOfStudy"] = narrow_nzsced.fieldOfStudy.apply(lambda x: re.su
 narrow_nzsced.head()
 
 
-## Remove enteries which have to useful data
+## Remove entries which have no useful data
 ```{python}
 data4 = course_dataset3[course_dataset3.fee.notnull() & (course_dataset3.fee != "N/A") & (course_dataset3.fee != "N/AN/A")]
 data4.head()
@@ -424,7 +426,7 @@ level_nzsced_fees.to_csv("../datasets/level_nzsced_fees.csv")
 ```
 
 # ***********************************************
-# R section: finalise and do some fulling of the gaps in the fees and durations, then merge with SAC funding rates
+# R section: finalise and do some filling of the gaps in the fees and durations, then merge with SAC funding rates
 # ***********************************************
 
 ```{r}
@@ -442,7 +444,7 @@ head(fees_and_durations)
 ```
 
 
-## Use sensable values to full gaps
+## Use sensible values to full gaps
 ```{r}
 fees_full <- tibble(
     level_code = c('04', '05', '07', '08', '09', '10'),
@@ -453,7 +455,7 @@ fees_full
 ```
 
 
-### Get all the level field combinations
+### Get all the level-field combinations
 
 This uses a dataset from the analysis process, do I want to do this?
 ```{r}
