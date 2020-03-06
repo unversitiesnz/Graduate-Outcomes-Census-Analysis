@@ -79,10 +79,11 @@ field_of_study_totals <- read_excel("../input_data/t3b - Occupation by narrow fi
 head(field_of_study_totals)
 ```
 
-## Read field of study income
+## Read field of study income 
+Dataset is already limited to full-time (employment code 1) employees
 ```{r}
 consolidated_income <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "consolidated_income")) %>%
-    mutate(age_when_better_off = ifelse(ever_better_off, age_when_better_off, "NEVER")) %>% filter(employed_code == "1") %>% select(-employed_code)
+    mutate(age_when_better_off = ifelse(ever_better_off, age_when_better_off, "NEVER"))
 head(consolidated_income)
 ```
 

@@ -90,7 +90,7 @@ head(consolidated_income)
 ```
 
 # output merged income dataset
-
+REMEMBER, lifetime income and better off data is only for full-time employeees
 ```{r}
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "consolidated_income"), consolidated_income, overwrite = TRUE)
 ```
