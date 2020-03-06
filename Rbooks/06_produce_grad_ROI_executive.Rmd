@@ -3,7 +3,7 @@ title: "Generate Graduate ROI Executive"
 output: html_notebook
 ---
 
-The main goal of this notebook is to create a formatted excel workbook containing a couple of sheets used by the executive director (Chris) to answer ad-hoc queries.
+The main goal of this notebook is to create a formatted excel workbook containing a couple of sheets, relating to most common occupations and qualifications, used by the executive director (Chris) to answer ad-hoc queries.
 
 ```{r}
 library(tidyverse)
