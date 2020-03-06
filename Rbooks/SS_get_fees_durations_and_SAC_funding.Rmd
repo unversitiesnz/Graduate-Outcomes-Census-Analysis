@@ -5,10 +5,15 @@ output: html_notebook
 This code screen-scrapes the TEC and Careers websites
 QUESTION - Careers website does not have field of study for generic degrees, and its qual pages are provider specific. How do we get fees from these?
 
+```{r}
+library(reticulate)
+```
+
 
 # Commands to setup python in R notebooks
 
-When you run the first python chuck R will ask to install Miniconda. I would recommend that you do this.
+When you run the first python chunk, R will ask to install Miniconda. I would recommend that you do this.
+https://docs.conda.io/en/latest/miniconda.html 
 Once Minicoda is installed, open (from the start menu) 'Anaconda Powershell Prompt (R-Mini)' and run the following command
 `conda activate r-reticulate`
 followed by the install commands.
@@ -21,8 +26,6 @@ python -m pip install -U pandas
 
 Required for TEC SAC FUNDING webscrap:
 python -m pip install -U lxml 
-
-
 
 
 # Check what version of python is installed, this should work on any version of 3.*
@@ -179,7 +182,7 @@ driver.get("https://www.careers.govt.nz/searchresults?tab=courses")
 
 ## define functions to do the screen scraping
 ```{python}
-# returns true there was a page to navigate to, false otherwise.
+# returns true if there was a page to navigate to, false otherwise.
 def navigate_to_next_page(driver):    
     next_button = driver.find_element_by_class_name("next")
     if next_button.get_attribute("href") == "javascript:;":
@@ -391,6 +394,7 @@ course_nzsced.head()
 
 
 ## Convert the study level text to numbers
+NOTE LEVEL 5 AND 6 DIPLOMAS CATEGORISED AS LEVEL 5
 ```{python}
 levels_of_interest = ["Certificate Level 3", "Diploma Level 5", "Diploma Level 6", "Bachelor Degree Level 7", "Bachelor Degree with Honours Level 8", "Masters Degree Level 9", "Doctorate Level 10"]
 levels_of_interest
@@ -480,6 +484,12 @@ head(fees_and_durations2)
 
 
 ## calculate fees for course and likely loan balance
+Cumulative duration created which considers previous study for postgraduate qualifications
+
+fee_component = fee*years
+none_fee_component = 10,900*years
+loan_for_course = sum
+
 ```{r}
 fees2 <- fees_and_durations2 %>% 
     mutate(
@@ -493,7 +503,8 @@ fees2 <- fees_and_durations2 %>%
                               )
                          ),
         fee_component = fee * duration_yr,
-        none_fee_component = 10900 * duration_yr
+        none_fee_component = 10900 * duration_yr 
+        #$10,900 ~ maximum living costs available per year as part of student loan - cf median of only $4,800?
     ) %>% mutate(
         duration_whole_yr = floor(cum_duration),
         loan_for_course = fee_component + none_fee_component
@@ -501,7 +512,7 @@ fees2 <- fees_and_durations2 %>%
 head(fees2)
 ```
 
-
+loan_at_graduation considers loan of previous study for postgrad qualifications
 
 ```{r}
 costs <- fees2 %>% mutate(
