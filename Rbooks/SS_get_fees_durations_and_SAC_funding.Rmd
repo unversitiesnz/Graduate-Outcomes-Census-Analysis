@@ -3,7 +3,6 @@ title: "Screen Scrape Fees, Durations and SAC funding"
 output: html_notebook
 ---
 This code screen-scrapes the TEC and Careers websites
-QUESTION - Careers website does not have field of study for generic degrees, and its qual pages are provider specific. How do we get fees from these?
 
 ```{r}
 library(reticulate)
@@ -421,6 +420,7 @@ set(course_nzsced.qualLevel)
 ```
 
 ## Group by study level and field of study
+We do this because we want fees for each field and level of study, whereas the Careers website only has fees by institution and broad field.
 The means of fee and durations are the result
 ```{python}
 level_nzsced_fees = course_nzsced2.groupby(["qualLevel", "NZSCED_Narrow"]).mean()
@@ -485,10 +485,7 @@ head(fees_and_durations2)
 
 ## calculate fees for course and likely loan balance
 Cumulative duration created which considers previous study for postgraduate qualifications
-
-fee_component = fee*years
-none_fee_component = 10,900*years
-loan_for_course = sum
+Using median non-fee component for 2018 or $6983 (Table 4, Student Loan Scheme Annual Report 2019)
 
 ```{r}
 fees2 <- fees_and_durations2 %>% 
@@ -503,8 +500,8 @@ fees2 <- fees_and_durations2 %>%
                               )
                          ),
         fee_component = fee * duration_yr,
-        none_fee_component = 10900 * duration_yr 
-        #$10,900 ~ maximum living costs available per year as part of student loan - cf median of only $4,800?
+        none_fee_component = 6983 * duration_yr 
+        #$6983 ~ median living costs + CRC borrowed in 2018 (previously set to max of 10,900)
     ) %>% mutate(
         duration_whole_yr = floor(cum_duration),
         loan_for_course = fee_component + none_fee_component
