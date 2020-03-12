@@ -26,6 +26,14 @@ data <- dbGetQuery(go_analysis_con, "SELECT *
 head(data)
 ```
 
+# Calculate total people count for each field/level
+```{r}
+people_counts <- data %>% group_by(employed_code, level_code, field_code) %>% 
+  summarise(people_count = sum(people_count)) %>% 
+  filter(people_count > 0)
+head(people_counts)
+```
+
 # Decide if we should impute for each given field/level group?
 ## count the missing -> not really used?
 ```{r}
@@ -61,7 +69,7 @@ should_impute <- wide_form %>% left_join(missing_count, by=c("employed_code","fi
                 (is.na(age_50_54) & is.na(age_55_59) & is.na(age_60_64)) |
                 (is.na(age_55_59) & is.na(age_60_64) & is.na(age_65_))
             )
-    )
+    ) %>% left_join(people_counts, by=c("employed_code", "field_code", "level_code"))
 head(should_impute)
 ```
 
@@ -122,7 +130,7 @@ impute_value = function(row) {
             }
             row["age_65_"] <- row["age_15_19_impute_income"] 
         }
-        for(age_group in 6:14) {
+        for(age_group in 7:15) {
             if(is.na(row[age_group])) {
                 if (!is.na(row[age_group + 1])) {
                     row[age_group] <- mean(as.numeric(row[(age_group - 1)]), as.numeric(row[(age_group + 1)]))
@@ -141,7 +149,13 @@ impute_value = function(row) {
             }
 
         }
+      row["did_impute"] <- TRUE
+    } else {
+      row["did_impute"] <- FALSE
     }
+  
+    row["safe_values"] <- (as.numeric(row["missing_count"]) == 0 || row["did_impute"] == TRUE) && as.numeric(row["people_count"]) > 20
+    
     return(row)
 }
 annual_income_with_imputation <- apply(ready_to_impute, 1, impute_value) %>% t %>% as_tibble %>% 
@@ -161,37 +175,44 @@ age_lookup
 ```
 
 ```{r}
+annual_income_with_imputation %>% 
+    filter(safe_values == TRUE, field_code == '0609', level_code == '10')
+```
+
+```{r}
 age_value_matrix <- annual_income_with_imputation %>% 
-    select(-c(Total, missing_count, can_impute, age_15_19_impute_income)) %>% apply(1, function(row) {
-    for(age_index in 1:(nrow(age_lookup) - 1)) {
-        lower_age_band <- age_lookup[age_index,]$age_names
-        upper_age_band <- age_lookup[age_index + 1,]$age_names
-
-        first_age <- age_lookup[age_index,]$midpoint
-        row[as.character(first_age)] <- as.numeric(row[lower_age_band])
-        # as.character(i)
-        for(i in (first_age+1):(first_age+4)) {
-
-
-            row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 5) + as.numeric(row[as.character(i - 1)])
-        }
-    }
-    
-    lower_age_band <- "age_60_64"
-    upper_age_band <- "age_65_"
-    first_age <- 62
-    row[as.character(first_age)] <- as.numeric(row[lower_age_band])
-    # as.character(i)
-    for(i in (first_age+1):(first_age+2)) {
-        row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 3) + as.numeric(row[as.character(i - 1)])
-    }
-    row[as.character(65)] <- as.numeric(row[upper_age_band])
-    #i <- i + 1
-    #row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 5) + as.numeric(row[as.character(i - 1)])
-    return(row)
-})
+    filter(safe_values == TRUE) %>%
+    select(-c(Total, missing_count, can_impute, did_impute, safe_values, people_count, age_15_19_impute_income)) %>% apply(1, function(row) {
+      for(age_index in 1:(nrow(age_lookup) - 1)) {
+          lower_age_band <- age_lookup[age_index,]$age_names
+          upper_age_band <- age_lookup[age_index + 1,]$age_names
+  
+          first_age <- age_lookup[age_index,]$midpoint
+          row[as.character(first_age)] <- as.numeric(row[lower_age_band])
+          # as.character(i)
+          for(i in (first_age+1):(first_age+4)) {
+  
+  
+              row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 5) + as.numeric(row[as.character(i - 1)])
+          }
+      }
+      
+      lower_age_band <- "age_60_64"
+      upper_age_band <- "age_65_"
+      first_age <- 62
+      row[as.character(first_age)] <- as.numeric(row[lower_age_band])
+      # as.character(i)
+      for(i in (first_age+1):(first_age+2)) {
+          row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 3) + as.numeric(row[as.character(i - 1)])
+      }
+      row[as.character(65)] <- as.numeric(row[upper_age_band])
+      #i <- i + 1
+      #row[as.character(i)] <- ((as.numeric(row[upper_age_band]) - as.numeric(row[lower_age_band])) / 5) + as.numeric(row[as.character(i - 1)])
+      return(row)
+  })
 #head(age_value_matrix)
 ```
+
 
 ## Check that the columns will be named as expected
 ```{r}
