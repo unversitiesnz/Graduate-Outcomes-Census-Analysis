@@ -86,32 +86,40 @@ Write the table before any transformations are done.
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_income_bands"), cen_income_bands, overwrite = TRUE)
 ```
 
-'Restricted' counts and incomes exclude those who earned $25,000 a year or less. Multiply counts by income band midpoint to get total income. Counts and incomes with suffix '2' exclude those who earned no income or made a loss.
+We take the sum of the product of each count and income band midpoint and then divide by the number of people to ge the mean income. 
+We do this for two distinct populations:
+'Restricted' counts and incomes exclude those who earned $25,000 a year or less. Counts and incomes with suffix '2' exclude those who earned no income or made a loss.
 
 ```{r}
 cen_annual_avg_income <- cen_income_bands %>% mutate(
+    
     restricted_people_count = `$25,001-$30,000` + `$30,001-$35,000` + `$35,001-$40,000` + 
                               `$40,001-$50,000` + `$50,001-$60,000` + `$70,001-$100,000` +
                               `$100,001-$150,000` + `$150,001 or More`,
+    
     restricted_total_income = `$25,001-$30,000` * 27500 + `$30,001-$35,000` * 32500 + `$35,001-$40,000` * 37500 + 
                               `$40,001-$50,000` * 45000 + `$50,001-$60,000` * 55000 + `$70,001-$100,000` * 85000 +
                               `$100,001-$150,000` * 125000 + `$150,001 or More` * 150000,
-    people_count2 = `$1-$5,000` + `$5,001-$10,000` +
+    
+    people_count2           = `$1-$5,000` + `$5,001-$10,000` +
                               `$10,001-$15,000` + `$15,001-$20,000` + `$20,001-$25,000` +
                               `$25,001-$30,000` + `$30,001-$35,000` + `$35,001-$40,000` + 
                               `$40,001-$50,000` + `$50,001-$60,000` + `$70,001-$100,000` +
                               `$100,001-$150,000` + `$150,001 or More`,
+    
     total_above_zero_income = `$1-$5,000` * 2500 + `$5,001-$10,000` * 7500 +
                               `$10,001-$15,000` * 12500 + `$15,001-$20,000` * 17500 + `$20,001-$25,000` * 22500 +
                               `$25,001-$30,000` * 27500 + `$30,001-$35,000` * 32500 + `$35,001-$40,000` * 37500 + 
                               `$40,001-$50,000` * 45000 + `$50,001-$60,000` * 55000 + `$70,001-$100,000` * 85000 +
                               `$100,001-$150,000` * 125000 + `$150,001 or More` * 200000
+    
 ) %>% mutate(
         restricted_mean_income = restricted_total_income / restricted_people_count
         , mean_income2 = total_above_zero_income / people_count2
     ) %>% 
     select(set_total, set_standard, employed_code, work_status, level_code, level, field_code, field, age, people_count, restricted_people_count, people_count2, mean_income2, mean_income, median_income, restricted_mean_income) %>%
     mutate(
+        #Rounding to the nearest hundred
         restricted_mean_income = round2(restricted_mean_income, -2),
         mean_income2 = round2(mean_income2, -2),
         mean_income = ifelse(mean_income == 0, NA, mean_income),
