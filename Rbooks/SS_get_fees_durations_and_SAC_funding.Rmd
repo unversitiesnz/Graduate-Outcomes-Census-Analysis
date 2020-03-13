@@ -25,6 +25,7 @@ python -m pip install -U pandas
 
 Required for TEC SAC FUNDING webscrap:
 python -m pip install -U lxml 
+python -m pip install -U xlrd
 
 
 # Check what version of python is installed, this should work on any version of 3.*
@@ -88,6 +89,7 @@ def sift_values(row):
         return row.shift(1)
     else:
         return row
+
 sac_funding2 = sac_pd[3:].apply(sift_values, axis = 1)
 sac_funding2
 ```
@@ -115,6 +117,7 @@ def convert_to_num(v):
         return pd.to_numeric(v[1:].replace(",", ""))
     else:
         return v
+
 sac_funding_rates2 = sac_funding_rates.apply(lambda x: x.apply(convert_to_num))
 sac_funding_rates2
 ```
@@ -132,6 +135,23 @@ nzsced_map1[nzsced_map1['NZSCED to SAC: SAC category and level'] == '0601 Medica
 ```
 
 ```{python}
+sac_funding_rates2["3"]["H"]
+get_sac_funding_rate("H", "3")
+```
+
+```{python}
+def get_sac_funding_rate(code, number):
+    temp = sac_funding_rates2[number][code]
+    if temp is None:
+        return NaN
+    elif isinstance(temp, float):
+       return temp
+    else:
+        return sac_funding_rates2[number][code][0]
+```
+
+
+```{python}
 def use_funding_code(x):
     if pd.isna(x):
         return x
@@ -144,7 +164,9 @@ def use_funding_code(x):
         l2 = x[1]
         rate1 = get_sac_funding_rate(cat, l1)
         rate2 = get_sac_funding_rate(cat, l2)
+        #print(x)
         return (rate1 + rate2) / 2
+        
     elif len(x) == 5:
         x = x.split("/")
         rate1 = get_sac_funding_rate(x[0][0], x[0][1])
@@ -152,7 +174,8 @@ def use_funding_code(x):
         return (rate1 + rate2) / 2
     else:
         return x
-use_funding_code("A1"), use_funding_code("A3/4"), use_funding_code("A1/B2")
+
+use_funding_code("A1"), use_funding_code("A3/4"), use_funding_code("A1/B2"), use_funding_code(float('NaN'))
 ```
 
 ```{python}
@@ -264,7 +287,7 @@ def getCourseDetails(driver, url):
     
     return course_details
 course_dataset = pd.DataFrame(columns=["url", "qualName", "providerName", "qualLevel", "fieldOfStudy", "duration", "annualFee", "govtSubsidy"])
-for link in course_links2:
+for link in course_pages:
     driver.get(link + "?hello=from_unz&screen_scape")
     course_dataset = course_dataset.append(getCourseDetails(driver, link), ignore_index=True)
     
