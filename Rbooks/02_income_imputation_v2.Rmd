@@ -18,7 +18,7 @@ go_analysis_con <- connect_to_GO_analysis_database()
 go_analysis_con
 ```
 
-Removing people who earned nothing or made a loss
+Removing total rows and those who did not earn anything or made a loss
 ```{r}
 data <- dbGetQuery(go_analysis_con, "SELECT *
   FROM [lng].[cen_annual_avg_income]
