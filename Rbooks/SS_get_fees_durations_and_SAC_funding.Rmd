@@ -270,6 +270,13 @@ pickle.dump(course_pages, f)
 f.close()
 ```
 
+```{python}
+f= open("../datasets/course_pages.pickle","rb")
+
+course_pages = pickle.load(f)
+f.close()
+```
+
 ## Web scraping details from all the courses pages on the Careers NZ website
 ## WARNING: this will take even longer (>hour)
 ```{python}
@@ -294,6 +301,14 @@ for link in course_pages:
 f= open("../datasets/course_dataset.pickle","wb")
 pickle.dump(course_dataset, f)
 f.close()
+```
+
+```{python}
+f= open("../datasets/course_dataset.pickle","rb")
+
+course_dataset_a = pickle.load(f)
+f.close()
+course_dataset_a.head()
 ```
 
 # performing post-scrape actions
