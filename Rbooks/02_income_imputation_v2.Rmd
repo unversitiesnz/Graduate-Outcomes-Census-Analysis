@@ -17,7 +17,8 @@ source("../scripts/unz_common.R")
 go_analysis_con <- connect_to_GO_analysis_database()
 go_analysis_con
 ```
-Limit data to people with standard qualifications who did not earn nothing or make a loss.
+
+Removing people who earned nothing or made a loss
 ```{r}
 data <- dbGetQuery(go_analysis_con, "SELECT *
   FROM [lng].[cen_annual_avg_income]
@@ -27,8 +28,9 @@ head(data)
 ```
 
 # Calculate total people count for each field/level
+Compare to counts in occupation by qual input data file?
 ```{r}
-people_counts <- data %>% group_by(employed_code, level_code, field_code) %>% 
+people_counts <- filter(data, age != 'Total') %>% group_by(employed_code, level_code, field_code) %>% 
   summarise(people_count = sum(people_count)) %>% 
   filter(people_count > 0)
 head(people_counts)
