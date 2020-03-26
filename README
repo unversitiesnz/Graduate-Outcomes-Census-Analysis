@@ -1,0 +1,6 @@
+This project takes census data relating to qualifications, occupations and incomes and transforms it into data
+relating to average and lifetime earnings of graduates, as well as the most common qualifications and occupations.
+
+The R codes, numbered according to order, are found in the Rbooks folder.
+
+Further documentation is found in the two Word files.
