@@ -17,15 +17,10 @@ source("../scripts/unz_common.R")
 Imports raw data and skips first few rows to where data begins.
 
 ```{r}
-data <- read_excel("../input_data/JOB-10148-1 - Field of Study income.xlsx", na = "NA", skip=7)
+data <- read_excel("../input_data/income_wide_2018.xlsx", na = "NA")
 head(data)
 ```
 
-There is a row at the end of the file which is not data, it needs to be removed.
-```{r}
-data <- data[!is.na(data$`Mean Income ($)`),]
-tail(data)
-```
 
 Adding code variables for field and study level
 ```{r}
