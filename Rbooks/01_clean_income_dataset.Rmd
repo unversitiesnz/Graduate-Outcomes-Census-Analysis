@@ -5,7 +5,8 @@ output:
     df_print: paged
 ---
 
-The dataset produced by Stats NZ is not in a very easy to handle format, with spaces in everything. This notebook produces a few easier-to-use datasets.
+This notebook produces a few easier-to-use datasets from the input data from the IDI.
+This input data *contains no total rows*, only strict aggregates of income bracket by age bracket by post-school field of study by qualification level by employment status. 
 
 ```{r}
 library(tidyverse)
@@ -14,7 +15,6 @@ library(openxlsx)
 library(DBI)
 source("../scripts/unz_common.R")
 ```
-Imports raw data and skips first few rows to where data begins.
 
 ```{r}
 data <- read_excel("../input_data/income_wide_2018.xlsx", na = "NA")
@@ -30,33 +30,28 @@ data2 <- data %>%
 head(data2)
 ```
 
-Remove some data which is never used, and define standard data used (rows corresponding to the standard qualifications that we are interested in). The helps prevent double counts.
+Define standard data used (rows corresponding to the standard qualifications that we are interested in). The helps prevent double counts.
 ```{r}
-data4 <- data2 %>%
-    filter(
-        # remove some qualification classifications:
-        !`Highest Qualification` %in% c("Total stated"),
-        !`Post School Qualification Field of Study` %in% c("Total stated", "Not Stated")
-    ) %>%
+data3 <- data2 %>%
     mutate(
-        set_total = `Highest Qualification` == "Total" | `Post School Qualification Field of Study` == "Total",
+#        set_total = `Highest Qualification` == "Total" | `Post # School Qualification Field of Study` == "Total",
         set_standard = `Highest Qualification` %in% 
             c('No Qualification', 'Level 1 Certificate', 'Level 2 Certificate', 'Level 3 Certificate', 
               'Level 4 Certificate', 'Total 5 & 6 Diploma', 'Bachelor Degree and Level 7 Qualification', 
               'Post-graduate and Honours Degrees', 'Masters Degree', 'Doctorate Degree', 
-              'Overseas Secondary School Qualification') & !set_total,
+              'Overseas Secondary School Qualification') 
         
     ) %>% mutate(
         #Fulltime code = 1, parttime = 3, all = 2
         employed_code = ifelse(`Work Status` == 'Employed full-time', 1, ifelse(`Work Status` == 'Total employed', 2, 3))
     )
 
-head(data4)
+head(data3)
 ```
 
 Rename columns so that there are not spaces in the column names.
 ```{r}
-cen_income_bands <- data4 %>%
+cen_income_bands <- data3 %>%
     rename(
         level = "Highest Qualification", 
         field = "Post School Qualification Field of Study", 
