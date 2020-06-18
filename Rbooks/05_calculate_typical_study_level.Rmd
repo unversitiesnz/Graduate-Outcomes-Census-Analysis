@@ -1,6 +1,8 @@
 ---
 title: "Calculate Typical Study Level"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 inline code? `r "test"`

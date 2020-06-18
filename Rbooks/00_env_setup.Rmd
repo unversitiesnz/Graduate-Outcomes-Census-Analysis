@@ -1,6 +1,8 @@
 ---
 title: "Environment setup"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 This notebook creates schemas in a database required for the processes to run.

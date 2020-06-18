@@ -1,6 +1,8 @@
 ---
 title: "Income imputation"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 This notebook uses the cen_annual_avg_income dataset and produces a yearly income dataset for the working life of a graduate.
 

@@ -1,6 +1,8 @@
 ---
 title: "Generate Graduate ROI Executive"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 The main goal of this notebook is to create a formatted excel workbook containing a couple of sheets, relating to most common occupations and qualifications, used by the executive director (Chris) to answer ad-hoc queries.

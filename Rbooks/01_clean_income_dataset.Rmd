@@ -1,6 +1,8 @@
 ---
 title: "Clean income data"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 The dataset produced by Stats NZ is not in a very easy to handle format, with spaces in everything. This notebook produces a few easier-to-use datasets.
