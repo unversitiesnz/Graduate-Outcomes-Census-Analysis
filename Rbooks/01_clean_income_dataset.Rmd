@@ -52,12 +52,12 @@ dips <- mutate(dips, `$150,001 or More`=`$150,001 or More.x`+`$150,001 or More.y
 names(dips)
 combined_dips_final <- dips[,c(1,38,2,3,39:54)]
 
-rbind(data, combined_dips_final)
+data1_5 <- rbind(data, combined_dips_final)
 ```
 
 Adding code variables for field and study level
 ```{r}
-data2 <- data %>% 
+data2 <- data1_5 %>% 
     append_narrow_field_of_study_code(field_var = "Post School Qualification Field of Study", code_var = "field_code") %>%
     append_study_level_code(level_var = "Highest Qualification", code_var = "level_code")
 head(data2)
@@ -90,13 +90,14 @@ cen_income_bands <- data3 %>%
     rename(
         level = "Highest Qualification", 
         field = "Post School Qualification Field of Study", 
-        people_count = "Total", 
-        mean_income = "Mean Income ($)",
-        median_income = "Median Income ($)",
+ #       people_count = "Total", 
+ #       mean_income = "Mean Income ($)",
+ #       median_income = "Median Income ($)",
         age = "Age Group",
         work_status = `Work Status`
     ) %>% select(
-        set_total, set_standard, employed_code, work_status, level_code, level, field_code, field, age, everything() 
+        set_standard, employed_code, work_status, level_code, level, field_code, field, age, everything() 
+        #No longer have set_total row
     )
 
 cen_income_bands
