@@ -117,7 +117,7 @@ dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_income_bands"), ce
 
 We take the sum of the product of each count and income band midpoint and then divide by the number of people to ge the mean income. 
 We do this for two distinct populations:
-'Restricted' counts and incomes exclude those who earned $25,000 a year or less. Counts and incomes with suffix '2' exclude those who earned no income or made a loss.
+'Restricted' counts and incomes exclude those who earned \$25,000 a year or less. Counts and incomes with suffix '2' exclude those who earned no income or made a loss. We only use restricted income to create a new employment status - those who earned \$25,000 a year or more and were employed full-time.
 
 ```{r}
 cen_annual_avg_income <- cen_income_bands %>% mutate(
@@ -128,7 +128,7 @@ cen_annual_avg_income <- cen_income_bands %>% mutate(
     
     restricted_total_income = `$25,001-$30,000` * 27500 + `$30,001-$35,000` * 32500 + `$35,001-$40,000` * 37500 + 
                               `$40,001-$50,000` * 45000 + `$50,001-$60,000` * 55000 + `$60,001-$70,000` * 65000 +
-                              `$70,001-$100,000` * 85000 + `$100,001-$150,000` * 125000 + `$150,001 or More` * 150000,
+                              `$70,001-$100,000` * 85000 + `$100,001-$150,000` * 125000 + `$150,001 or More` * 200000,
     
     people_count2           = `$1-$5,000` + `$5,001-$10,000` +
                               `$10,001-$15,000` + `$15,001-$20,000` + `$20,001-$25,000` +
@@ -146,13 +146,13 @@ cen_annual_avg_income <- cen_income_bands %>% mutate(
         restricted_mean_income = restricted_total_income / restricted_people_count
         , mean_income2 = total_above_zero_income / people_count2
     ) %>% 
-    select(set_total, set_standard, employed_code, work_status, level_code, level, field_code, field, age, people_count, restricted_people_count, people_count2, mean_income2, mean_income, median_income, restricted_mean_income) %>%
+    select(set_standard, employed_code, work_status, level_code, level, field_code, field, age, restricted_people_count, people_count2, mean_income2, restricted_mean_income) %>%
     mutate(
         #Rounding to the nearest hundred
         restricted_mean_income = round2(restricted_mean_income, -2),
         mean_income2 = round2(mean_income2, -2),
-        mean_income = ifelse(mean_income == 0, NA, mean_income),
-        median_income = ifelse(median_income == 0, NA, median_income),
+#       mean_income = ifelse(mean_income == 0, NA, mean_income),
+#       median_income = ifelse(median_income == 0, NA, median_income),
         restricted_mean_income = ifelse(restricted_mean_income == 0, NA, restricted_mean_income),
         mean_income2 = ifelse(mean_income2 == 0, NA, mean_income2)
     
@@ -169,15 +169,15 @@ Adding data for counts and mean incomes limited to those who earned more than $2
 cen_annual_avg_income2 <- dbReadTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income"))
 unique(cen_annual_avg_income2$level_code)
 temp <- cen_annual_avg_income2 %>% filter(employed_code == 1) %>%
-    select(-c(people_count, mean_income)) %>%
-    rename(people_count = restricted_people_count, mean_income = restricted_mean_income) %>%
-    mutate(median_income = NA, employed_code = 4, work_status = "Employed full-time (income restricted)")
+#   select(-c(people_count, mean_income)) %>%
+    mutate(people_count2 = restricted_people_count, mean_income2 = restricted_mean_income) %>%
+    mutate(employed_code = 4, work_status = "Employed full-time (income restricted)")
 head(temp)
 ```
 
 Writing table to database
 ```{r}
-cen_annual_avg_income2_a <- rbind(cen_annual_avg_income2 %>% select(-c(restricted_people_count, restricted_mean_income)), temp)
+cen_annual_avg_income2_a <- rbind(cen_annual_avg_income2 %>% select(-c(restricted_people_count, restricted_mean_income)), temp%>% select(-c(restricted_people_count, restricted_mean_income)))
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income2"), cen_annual_avg_income2_a, overwrite = TRUE)
 ```
 

@@ -82,17 +82,18 @@ tabulate_and_save_income_set(income_data, "annual_avg_3_income_30_39", "annual_a
 
 Not sure about the following: might come back to it, might remove it.
 (Creates tables as above but limits to those who are employed full-time earning $25k+)
+
 ```{r}
-res_income_data <- dbGetQuery(go_analysis_con, "SELECT *
-  FROM [lng].[cen_annual_avg_income2]
-  where set_standard = 1 and employed_code = 4") %>% get_30_39_income_summary_set()
-head(res_income_data)
+#res_income_data <- dbGetQuery(go_analysis_con, "SELECT *
+#  FROM [lng].[cen_annual_avg_income2]
+#  where set_standard = 1 and employed_code = 4") %>% #get_30_39_income_summary_set()
+#head(res_income_data)
 ```
 
 ```{r}
-dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income_30_39_res"), res_income_data, overwrite = TRUE)
+#dbWriteTable(go_analysis_con, Id(schema = "lng", table = #"cen_annual_avg_income_30_39_res"), res_income_data, overwrite = TRUE)
 ```
 
 ```{r}
-tabulate_and_save_income_set(res_income_data, "annual_avg_income_30_39_res", "annual_avg_income_30_39_res_people_counts")
+#tabulate_and_save_income_set(res_income_data, "annual_avg_income_30_39_res", #"annual_avg_income_30_39_res_people_counts")
 ```
