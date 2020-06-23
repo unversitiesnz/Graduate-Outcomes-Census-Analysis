@@ -49,7 +49,7 @@ head(annual_income_with_imputation)
 ## convert imputed income dataset to long by age
 ```{r}
 income_long <- annual_income_with_imputation %>% filter(can_impute == TRUE) %>%
-    select(-c(Total, missing_count, can_impute, age_15_19_impute_income)) %>%
+    select(-c(missing_count, can_impute, age_15_19_impute_income)) %>%
     pivot_longer(names_to = 'age', values_to = 'mean_income',
         cols = c(age_15_19, age_20_24, 
                  age_25_29, age_30_34, 
@@ -85,9 +85,9 @@ get_income_age_distribution <- function(.data) {
         mutate(proportion = people_count/sum(people_count, na.rm = TRUE))
     return (age_distribution)
 }
-age_distribution <- data %>% select(-c(people_count)) %>% 
-    rename(people_count = people_count2) %>% 
-    filter(age != 'Total') %>% get_income_age_distribution()
+age_distribution <- data %>%
+    mutate(people_count = people_count2) %>% 
+    get_income_age_distribution()
 age_distribution
 ```
 
@@ -101,7 +101,7 @@ group_by(employed_code, level_code, level, field_code, field)
 
 ## get people counts
 ```{r}
-all_ft_people_counts <- data %>% select(-c(people_count)) %>% 
+all_ft_people_counts <- data %>%
     rename(people_count = people_count2) %>% 
     filter(age != 'Total') %>%
     group_by(employed_code, level_code, level, field_code, field) %>%

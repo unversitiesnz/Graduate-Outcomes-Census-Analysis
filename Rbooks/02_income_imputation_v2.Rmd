@@ -24,7 +24,7 @@ Removing total rows and those who did not earn anything or made a loss
 ```{r}
 data <- dbGetQuery(go_analysis_con, "SELECT *
   FROM [lng].[cen_annual_avg_income]
-  where set_standard = 1") %>% select(-c(set_total, set_standard, work_status, restricted_people_count, restricted_mean_income, mean_income, median_income, people_count)) %>%
+  where set_standard = 1") %>% select(-c(set_standard, work_status, restricted_people_count, restricted_mean_income)) %>%
     rename(people_count = people_count2, mean_income = mean_income2)
 head(data)
 ```
@@ -186,7 +186,7 @@ annual_income_with_imputation %>%
 ```{r}
 age_value_matrix <- annual_income_with_imputation %>% 
     filter(safe_values == TRUE) %>%
-    select(-c(Total, missing_count, can_impute, did_impute, safe_values, people_count, age_15_19_impute_income)) %>% apply(1, function(row) {
+    select(-c(missing_count, can_impute, did_impute, safe_values, people_count, age_15_19_impute_income)) %>% apply(1, function(row) {
       for(age_index in 1:(nrow(age_lookup) - 1)) {
           lower_age_band <- age_lookup[age_index,]$age_names
           upper_age_band <- age_lookup[age_index + 1,]$age_names
