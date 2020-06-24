@@ -5,8 +5,6 @@ output:
     df_print: paged
 ---
 
-inline code? `r "test"`
-
 The objective of this notebook is to calculate the typical study level of individuals in different occupations.
 
 This is done by calculating how many individuals are at different levels, making that a proportion and adding them together to see if any of the groups are met.
@@ -32,8 +30,9 @@ library(readxl)
 
 ## Read occupation file
 ```{r}
-occupation_studylevel <- read_excel("../input_data/t3 - Occupation by field of study - Checked.xlsx", sheet="Occupation by level totals", skip = 4)
-head(occupation_studylevel)
+occupation_studylevel <- read_excel("../input_data/occupations_by_levels_2018.xlsx")
+occupation_studylevel$people_count <- as.numeric(occupation_studylevel$people_count)
+head(occupation_studylevel, 10)
 ```
 
 ## compute occupation counts
@@ -41,7 +40,7 @@ head(occupation_studylevel)
 Excluding not disclosed and unknown qualification levels.
 ```{r}
 occupation_counts <- occupation_studylevel %>% filter(
-    !i_standard_highest_qual_code %in% c(97, 99)
+    !i_standard_highest_qual_code %in% c("Overseas Secondary School Qualification", "Not elsewhere included")
 ) %>% group_by(i_occupation_code) %>%
     summarise(occupation_people_count = sum(people_count))
 head(occupation_counts)
@@ -49,7 +48,7 @@ head(occupation_counts)
 
 ## pivot occupation by study level (converting to wide format)
 ```{r}
-occupation_studylevel_wide <- occupation_studylevel %>% pivot_wider(names_from = i_standard_highest_qual_code, names_prefix = "lvl_", values_from = people_count)
+occupation_studylevel_wide <- occupation_studylevel %>% pivot_wider(names_from = i_standard_highest_qual_code, values_from = people_count)
 head(occupation_studylevel_wide)
 ```
 
