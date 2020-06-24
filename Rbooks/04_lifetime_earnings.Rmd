@@ -100,7 +100,7 @@ unique(yearly_gross_income_long[c("level", "level_code")])
 
 # Calculate a simple lifetime income
 
-Simple in that it does not remove fees from the total income
+Simple in that it does not remove fees from the total income. Assume people 
 
 ```{r}
 # simple gross lifetime incomes
@@ -146,7 +146,7 @@ head(income_with_fees)
 tax_calculated <- income_with_fees %>% group_by(employed_code, field, level) %>% arrange(age) %>% 
     mutate( #Offset income = income, unless younger than minimum qual completion age
         offset_income = ifelse(is.na(duration_whole_yr), gross_income, ifelse(age < 17 + duration_whole_yr, 0, gross_income)),
-         #Loan payments are 12% of all income over $19760/year
+         #Loan payments are 12% of all gross income over $19760/year
         offset_income_loanable = ifelse(offset_income < 19760, 0, (offset_income-19760)),
         loan_repayments = ifelse(
           offset_income < 19760, 0, ifelse(
@@ -184,7 +184,7 @@ head(tax_calculated)
 Calculating baseline tax and income for each year for a school leaver with no post-school qualification
 ```{r}
 baseline_income <- tax_calculated %>% 
-    filter(field_code == "0000", level_code == "00") %>%
+    filter(is.na(field_code), level_code == "00") %>%
     ungroup() %>%
     select(employed_code, age, gross_income, tax) %>%
     rename(baseline_income = gross_income, baseline_tax = tax)
@@ -243,7 +243,7 @@ head(npv_calculated)
 ```
 
 
-# Lifetime income
+# Lifetime totals of income above, tax above, etc.
 ```{r}
 summarised_lifetime_income <- npv_calculated %>% mutate(Field_Text = paste(field_code, field)) %>% 
     group_by(employed_code, Field_Text, level_code) %>%
@@ -318,8 +318,7 @@ dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_age_better_off"), 
 
 ```{r}
 # do some checks
-npv_calculated %>% filter(field_code == "0201", level_code == "07") %>%
-    select(age, gross_income)
+npv_calculated %>% filter(field_code == "0201", level_code == "07", employed_code == 1) %>% View()
 ```
 
 # Output age when better off in long format
