@@ -46,7 +46,7 @@ get_30_39_income_summary_set <- function (.data) {
         ) %>% 
         group_by(employed_code, level_code, Field_Text) %>%
       #Calculating unweighted mean - weighted means calculated later
-        summarise(mean_income = round2(mean(mean_income, na.rm = TRUE), -2), people_count = sum(people_count, na.rm = TRUE)) %>%
+        summarise(mean_income = round2(mean(mean_income2, na.rm = TRUE), -2), people_count = sum(people_count2, na.rm = TRUE)) %>%
         mutate(
             mean_income = ifelse(is.na(mean_income), NA, mean_income)
         )
@@ -64,8 +64,9 @@ tabulate_and_save_income_set <- function (.data, income_table_name, counts_table
 
 
 ```{r}
-income_data <- data %>% select(-c(mean_income, people_count)) %>% 
-    rename(mean_income = mean_income2, people_count = people_count2) %>% filter(people_count > 3) %>% #Filtering here and in following line to remove very low, unpredictable observations
+income_data <- data %>%
+#    rename(mean_income = mean_income2, people_count = people_count2) %>%
+  filter(people_count2 > 3) %>% #Filtering here and in following line to remove very low, unpredictable observations
     get_30_39_income_summary_set() %>% filter(people_count > 20)
 head(income_data)
 ```
@@ -84,16 +85,16 @@ Not sure about the following: might come back to it, might remove it.
 (Creates tables as above but limits to those who are employed full-time earning $25k+)
 
 ```{r}
-#res_income_data <- dbGetQuery(go_analysis_con, "SELECT *
-#  FROM [lng].[cen_annual_avg_income2]
-#  where set_standard = 1 and employed_code = 4") %>% #get_30_39_income_summary_set()
-#head(res_income_data)
+res_income_data <- dbGetQuery(go_analysis_con, "SELECT *
+  FROM [lng].[cen_annual_avg_income2]
+  where set_standard = 1 and employed_code = 4") %>% get_30_39_income_summary_set()
+head(res_income_data)
 ```
 
 ```{r}
-#dbWriteTable(go_analysis_con, Id(schema = "lng", table = #"cen_annual_avg_income_30_39_res"), res_income_data, overwrite = TRUE)
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_avg_income_30_39_res"), res_income_data, overwrite = TRUE)
 ```
 
 ```{r}
-#tabulate_and_save_income_set(res_income_data, "annual_avg_income_30_39_res", #"annual_avg_income_30_39_res_people_counts")
+tabulate_and_save_income_set(res_income_data, "annual_avg_income_30_39_res", "annual_avg_income_30_39_res_people_counts")
 ```

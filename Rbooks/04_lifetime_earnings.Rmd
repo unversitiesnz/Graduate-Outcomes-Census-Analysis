@@ -74,12 +74,16 @@ head(yearly_gross_income_long)
 
 The yearly income dataset does not contain people counts, so it is being obtained from a different table
 ```{r}
-total_people_counts <- dbGetQuery(go_analysis_con, "SELECT
+people_counts <- dbGetQuery(go_analysis_con, 
+      "SELECT
       employed_code, [level_code]
-      ,[field], field_code
-,[people_count2]
+      ,[field], field_code, age
+      ,[people_count2]
   FROM [GO_Analysis_Data].[lng].[cen_annual_avg_income]
-  where age = 'Total' and people_count > 0 and set_standard = 1") %>% rename(people_count_all_ages = people_count2) %>% 
+  where people_count2 > 0 and set_standard = 1")
+
+total_people_counts <- people_counts %>% group_by(employed_code, level_code, field, field_code) %>% summarise(people_count2 = sum(people_count2)) %>%
+rename(people_count_all_ages = people_count2) %>% 
   mutate(
     Field_Text = paste(field_code, field),
     employed_code = as.character(employed_code)
