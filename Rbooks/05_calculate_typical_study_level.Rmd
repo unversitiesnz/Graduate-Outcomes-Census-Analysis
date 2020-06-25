@@ -35,6 +35,13 @@ occupation_studylevel$people_count <- as.numeric(occupation_studylevel$people_co
 head(occupation_studylevel, 10)
 ```
 
+
+```{r}
+occupation_studylevel <- occupation_studylevel %>% 
+    append_study_level_code(level_var = "i_standard_highest_qual_code", code_var = "level_code") %>% select(-i_standard_highest_qual_code) %>% rename(i_standard_highest_qual_code=level_code)
+head(occupation_studylevel)
+```
+
 ## compute occupation counts
 
 Excluding not disclosed and unknown qualification levels.
@@ -48,7 +55,7 @@ head(occupation_counts)
 
 ## pivot occupation by study level (converting to wide format)
 ```{r}
-occupation_studylevel_wide <- occupation_studylevel %>% pivot_wider(names_from = i_standard_highest_qual_code, values_from = people_count)
+occupation_studylevel_wide <- occupation_studylevel %>% pivot_wider(names_from = i_standard_highest_qual_code, names_prefix = "lvl_", values_from = people_count)
 head(occupation_studylevel_wide)
 ```
 
@@ -56,10 +63,10 @@ head(occupation_studylevel_wide)
 ```{r}
 result <- occupation_studylevel_wide %>%
         group_by(i_occupation_code) %>%
-        mutate(school = sum(lvl_0, lvl_1, lvl_2, lvl_3, lvl_11, na.rm = TRUE), 
-               cert_dip = sum(lvl_5, na.rm = TRUE),
-               degree_or_higher = sum(lvl_7, lvl_8, lvl_9, lvl_10, na.rm = TRUE), 
-               tertiary = sum(lvl_4, lvl_5, lvl_7, lvl_8, lvl_9, lvl_10, na.rm = TRUE)
+        mutate(school = sum(lvl_00, lvl_01, lvl_02, lvl_03, lvl_11, na.rm = TRUE), 
+               cert_dip = sum(lvl_05, na.rm = TRUE),
+               degree_or_higher = sum(lvl_07, lvl_08, lvl_09, lvl_10, na.rm = TRUE), 
+               tertiary = sum(lvl_04, lvl_05, lvl_07, lvl_08, lvl_09, lvl_10, na.rm = TRUE)
               ) %>% ungroup()
 head(result)
 ```
