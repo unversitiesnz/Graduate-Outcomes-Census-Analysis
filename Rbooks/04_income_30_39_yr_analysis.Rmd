@@ -66,7 +66,7 @@ tabulate_and_save_income_set <- function (.data, income_table_name, counts_table
 ```{r}
 income_data <- data %>%
 #    rename(mean_income = mean_income2, people_count = people_count2) %>%
-  filter(people_count2 > 3) %>% #Filtering here and in following line to remove very low, unpredictable observations
+  filter(people_count2 > 3) %>% #Removing zeros (none between 0 and 6)
     get_30_39_income_summary_set() %>% filter(people_count > 20)
 head(income_data)
 ```
