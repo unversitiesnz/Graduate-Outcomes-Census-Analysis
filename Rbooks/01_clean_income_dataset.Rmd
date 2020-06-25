@@ -17,7 +17,7 @@ source("../scripts/unz_common.R")
 ```
 
 ```{r}
-data <- read_excel("../input_data/income_wide_2018.xlsx", na = "NA")
+data <- read_csv("../input_data/income_wide_2018.csv", na = "NA")
 head(data)
 ```
 
