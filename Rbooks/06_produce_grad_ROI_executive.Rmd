@@ -26,16 +26,18 @@ go_analysis_con
 
 # Read input file
 ```{r}
-grad_outcomes_datacube <- read_excel("../input_data/t3b - Occupation by narrow field of study- checked.xlsx", sheet = "Occupation by narrow study", skip=4)
+grad_outcomes_datacube <- read.csv("../input_data/occupations_by_levels_narrow_2018.csv")
 head(grad_outcomes_datacube)
 ```
 
 #Adjusting format of columns, bringing in text variables for occupation and narrow field of study
 ```{r}
-grad_cube2 <- grad_outcomes_datacube %>% mutate(i_occupation_code = as.character(i_occupation_code)) %>% 
+grad_cube2 <- grad_outcomes_datacube %>% mutate(i_occupation_code = as.character(i_occupation_code)) %>%
     append_ANZSCO_L5_txt(code_var = "i_occupation_code", ANZSCO_var = "occupation_text") %>%
-    mutate(narrow_field_code = formatC(narrow_field_code, width = 4, format = "d", flag = "0")) %>%
-    append_narrow_field_of_study_txt(code_var = "narrow_field_code", field_var = "narrow_field_text") %>%
+#    mutate(narrow_field_code = formatC(narrow_field_code, width = 4, format = "d", flag = "0")) %>%
+    append_narrow_field_of_study_code(code_var = "narrow_field_code", field_var = "narrow_field_text") %>%
+    append_study_level_code(level_var = "i_standard_highest_qual_code", code_var = "level_code") %>%
+    rename(i_standard_highest_qual_text = i_standard_highest_qual_code, i_standard_highest_qual_code = level_code) %>%
     filter(!i_standard_highest_qual_code %in% c(97, 99)) %>%
     mutate(
         i_standard_highest_qual_code =  formatC(i_standard_highest_qual_code, width = 2, format = "d", flag = "0"),
@@ -75,9 +77,9 @@ head(top_occupations_2)
 
 #Getting number of people for each field of study, with correct format
 ```{r}
-field_of_study_totals <- read_excel("../input_data/t3b - Occupation by narrow field of study- Checked.xlsx", sheet="narrow field of study totals", skip = 5, col_types = c('numeric','numeric', 'numeric')) %>%
-    filter(set_code == 1) %>% mutate(narrow_field_code = formatC(narrow_field_code, width = 4, format = "d", flag = "0") ) %>%
-    select(narrow_field_code, people_count)
+field_of_study_totals <- read.csv("../input_data/field_counts_2018.csv") %>%
+append_narrow_field_of_study_code(code_var = "narrow_field_code", field_var = "narrow_field_text") %>%
+  select(-narrow_field_text)
 head(field_of_study_totals)
 ```
 
@@ -170,7 +172,8 @@ head(typical_study_levels)
 ```
 
 ```{r}
-occupation_totals <- read_excel("../input_data/t3 - Occupation by field of study - Checked.xlsx", sheet="Occupation totals", skip = 4, col_types = c('text', 'numeric'))
+occupation_totals <- read.csv("../input_data/occup_counts_2018.csv")
+occupation_totals$i_occupation_code <- as.character(occupation_totals$i_occupation_code)
 head(occupation_totals)
 ```
 
@@ -178,7 +181,7 @@ head(occupation_totals)
 ```{r}
 top_fields_3 <- top_fields_2 %>% 
     left_join(typical_study_levels) %>% 
-    left_join(occupation_totals) %>% 
+    left_join(occupation_totals) %>%
     
     select(occupation_id, i_occupation_code, occupation_text, people_count, typical_study, everything()) %>% select(-c(occupation_text))
 head(top_fields_3)
@@ -404,5 +407,5 @@ addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecorati
 
 ```{r}
 #writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
-openxlsx::saveWorkbook(wb, '../working_outputs/Graduate ROI Occupation by Field of Study 2013 NEW.xlsx', overwrite = T)
+openxlsx::saveWorkbook(wb, '../working_outputs/Graduate ROI Occupation by Field of Study 2018 NEW.xlsx', overwrite = T)
 ```
