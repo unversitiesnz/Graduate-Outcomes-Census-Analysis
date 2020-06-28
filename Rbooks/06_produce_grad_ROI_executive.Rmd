@@ -38,11 +38,14 @@ grad_cube2 <- grad_outcomes_datacube %>% mutate(i_occupation_code = as.character
     append_narrow_field_of_study_code(code_var = "narrow_field_code", field_var = "narrow_field_text") %>%
     append_study_level_code(level_var = "i_standard_highest_qual_code", code_var = "level_code") %>%
     rename(i_standard_highest_qual_text = i_standard_highest_qual_code, i_standard_highest_qual_code = level_code) %>%
-    filter(!i_standard_highest_qual_code %in% c(97, 99)) %>%
+    filter(!i_standard_highest_qual_code %in% c(97, 99, NA)) %>% #Remove people with highest qualifications Not Elsewhere Included
     mutate(
         i_standard_highest_qual_code =  formatC(i_standard_highest_qual_code, width = 2, format = "d", flag = "0"),
         i_standard_highest_qual_code = ifelse(i_standard_highest_qual_code == '11', 'OS', i_standard_highest_qual_code)
-    )
+    ) %>%  filter(people_count!=0)
+grad_cube2$narrow_field_code[is.na(grad_cube2$narrow_field_code)] <- "0000"
+grad_cube2$narrow_field_code[grad_cube2$narrow_field_text=='Field of Study Not Given'] <- "3333"
+grad_cube2$narrow_field_text[grad_cube2$narrow_field_text=='No Qualification'] <- "No Post-School Qualification"
 head(grad_cube2)
 ```
 

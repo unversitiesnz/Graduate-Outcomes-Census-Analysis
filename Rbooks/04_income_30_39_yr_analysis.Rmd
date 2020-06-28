@@ -73,7 +73,7 @@ head(income_data)
 
 
 ```{r}
- dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_3_avg_income_30_39"), income_data, overwrite = TRUE)
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_annual_3_avg_income_30_39"), income_data, overwrite = TRUE)
 ```
 
 ```{r}

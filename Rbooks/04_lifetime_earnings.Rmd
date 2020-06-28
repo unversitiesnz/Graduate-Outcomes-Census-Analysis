@@ -184,7 +184,7 @@ head(tax_calculated)
 Calculating baseline tax and income for each year for a school leaver with no post-school qualification
 ```{r}
 baseline_income <- tax_calculated %>% 
-    filter(is.na(field_code), level_code == "00") %>%
+    filter(field_code == "0000", level_code == "00") %>%
     ungroup() %>%
     select(employed_code, age, gross_income, tax) %>%
     rename(baseline_income = gross_income, baseline_tax = tax)
@@ -267,6 +267,9 @@ dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_lifetime_income"),
                 ! (is.na(lifetime_above_school_leaver) & is.na(discounted_lifetime_income) & is.na(discounted_lifetime_above_school_leaver) & is.na(offset_lifetime_income) & is.na(lifetime_tax) & is.na(tax_above_school_leaver))
              ), 
              overwrite = TRUE)
+
+dbWriteTable(go_analysis_con, Id(schema = "lng", table = "annual_npv_18"), npv_calculated, 
+             overwrite = TRUE)
 ```
 
 ```{r}
@@ -318,7 +321,7 @@ dbWriteTable(go_analysis_con, Id(schema = "tab", table = "cen_age_better_off"), 
 
 ```{r}
 # do some checks
-npv_calculated %>% filter(field_code == "0201", level_code == "07", employed_code == 1) %>% View()
+npv_calculated %>% filter(field_code == "0000", employed_code == 1) %>% View()
 ```
 
 # Output age when better off in long format

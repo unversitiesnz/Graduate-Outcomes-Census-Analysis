@@ -538,8 +538,8 @@ fees2 <- fees_and_durations2 %>%
                               )
                          ),
         fee_component = fee * duration_yr,
-        none_fee_component = 4800 * duration_yr 
-        #$4800 ~ median living costs + CRC borrowed in 2013
+        none_fee_component = 6983 * duration_yr 
+        #$4800 ~ median living costs + CRC borrowed in 2013 (6983 in 2018)
     ) %>% mutate(
         duration_whole_yr = floor(cum_duration),
         loan_for_course = fee_component + none_fee_component
