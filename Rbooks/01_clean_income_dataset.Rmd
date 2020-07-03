@@ -17,7 +17,7 @@ source("../scripts/unz_common.R")
 ```
 
 ```{r}
-data <- read_csv("../input_data/income_wide_2018.csv", na = "NA")
+data <- read_csv("../input_data/income_wide_2006.csv", na = "NA")
 head(data)
 ```
 
@@ -43,11 +43,9 @@ dips <- mutate(dips, `$25,001-$30,000`=`$25,001-$30,000.x`+`$25,001-$30,000.y`)
 dips <- mutate(dips, `$30,001-$35,000`=`$30,001-$35,000.x`+`$30,001-$35,000.y`)
 dips <- mutate(dips, `$35,001-$40,000`=`$35,001-$40,000.x`+`$35,001-$40,000.y`)
 dips <- mutate(dips, `$40,001-$50,000`=`$40,001-$50,000.x`+`$40,001-$50,000.y`)
-dips <- mutate(dips, `$50,001-$60,000`=`$50,001-$60,000.x`+`$50,001-$60,000.y`)
-dips <- mutate(dips, `$60,001-$70,000`=`$60,001-$70,000.x`+`$60,001-$70,000.y`)
+dips <- mutate(dips, `$50,001-$70,000`=`$50,001-$70,000.x`+`$50,001-$70,000.y`)
 dips <- mutate(dips, `$70,001-$100,000`=`$70,001-$100,000.x`+`$70,001-$100,000.y`)
-dips <- mutate(dips, `$100,001-$150,000`=`$100,001-$150,000.x`+`$100,001-$150,000.y`)
-dips <- mutate(dips, `$150,001 or More`=`$150,001 or More.x`+`$150,001 or More.y`)
+dips <- mutate(dips, `$100,001 or More`=`$100,001 or More.x`+`$100,001 or More.y`)
 
 names(dips)
 combined_dips_final <- dips[,c(1,38,2,3,39:54)]
