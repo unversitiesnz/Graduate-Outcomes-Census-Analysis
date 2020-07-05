@@ -26,7 +26,7 @@ go_analysis_con
 
 # Read input file
 ```{r}
-grad_outcomes_datacube <- read.csv("../input_data/occupations_by_levels_narrow_2018.csv")
+grad_outcomes_datacube <- read.csv("../input_data/occupations_by_levels_narrow_2006.csv")
 head(grad_outcomes_datacube)
 ```
 
@@ -80,7 +80,7 @@ head(top_occupations_2)
 
 #Getting number of people for each field of study, with correct format
 ```{r}
-field_of_study_totals <- read.csv("../input_data/field_counts_2018.csv") %>%
+field_of_study_totals <- read.csv("../input_data/field_counts_2006.csv") %>%
 append_narrow_field_of_study_code(code_var = "narrow_field_code", field_var = "narrow_field_text") %>%
   select(-narrow_field_text)
 head(field_of_study_totals)
@@ -175,7 +175,7 @@ head(typical_study_levels)
 ```
 
 ```{r}
-occupation_totals <- read.csv("../input_data/occup_counts_2018.csv")
+occupation_totals <- read.csv("../input_data/occup_counts_2006.csv")
 occupation_totals$i_occupation_code <- as.character(occupation_totals$i_occupation_code)
 head(occupation_totals)
 ```
@@ -410,5 +410,5 @@ addStyle(wb, field_of_study_sheet_name, createStyle(wrapText =TRUE, textDecorati
 
 ```{r}
 #writeData(wb,field_of_study_cross_name,field_level_cross_ref_table, rowNames=FALSE, colNames = TRUE)
-openxlsx::saveWorkbook(wb, '../working_outputs/Graduate ROI Occupation by Field of Study 2018 NEW.xlsx', overwrite = T)
+openxlsx::saveWorkbook(wb, '../working_outputs/Graduate ROI Occupation by Field of Study 2006.xlsx', overwrite = T)
 ```

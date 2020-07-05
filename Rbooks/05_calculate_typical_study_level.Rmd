@@ -30,7 +30,7 @@ library(readxl)
 
 ## Read occupation file
 ```{r}
-occupation_studylevel <- read.csv("../input_data/occupations_by_levels_broad_2018.csv")
+occupation_studylevel <- read.csv("../input_data/occupations_by_levels_broad_2006.csv")
 occupation_studylevel$people_count <- as.numeric(occupation_studylevel$people_count)
 head(occupation_studylevel, 10)
 ```
