@@ -65,6 +65,7 @@ driver = webdriver.Chrome()
 driver.get("https://www.tec.govt.nz/funding/funding-and-performance/funding/fund-finder/student-achievement-component-provision-at-level-3-and-above-on-the-nzqf-fund/sac-funding-rates/")
 ```
 
+
 ```{python}
 sac_accordions = driver.find_elements_by_css_selector("div .accordion-item")
 sac_accordions
@@ -125,7 +126,7 @@ sac_funding_rates2
 # Map to NZSCED
 
 ```{python}
-nzsced_map1 = pd.read_excel("../program_costs/NZSCED to SAC.xlsx")
+nzsced_map1 = pd.read_excel("../program_costs/NZSCED to SAC.xls")
 nzsced_map1.head()
 ```
 
@@ -133,12 +134,6 @@ nzsced_map1.head()
 nzsced_map1[nzsced_map1['NZSCED to SAC: SAC category and level'] == '0601 Medical Studies']
 # cells that were na are now NaN
 ```
-
-```{python}
-sac_funding_rates2["3"]["H"]
-get_sac_funding_rate("H", "3")
-```
-
 ```{python}
 def get_sac_funding_rate(code, number):
     temp = sac_funding_rates2[number][code]
@@ -148,6 +143,12 @@ def get_sac_funding_rate(code, number):
        return temp
     else:
         return sac_funding_rates2[number][code][0]
+```
+
+
+```{python}
+sac_funding_rates2["3"]["H"]
+get_sac_funding_rate("H", "3")
 ```
 
 
@@ -312,10 +313,14 @@ course_dataset_a.head()
 ```
 
 # performing post-scrape actions
-## convert field of study from type object to string.
+## convert field of study from type object to string and remove any urls that aren't a qualification.
 ```{python}
 course_dataset2 = course_dataset
 course_dataset2["fieldOfStudy"] = course_dataset2["fieldOfStudy"] .astype('str') 
+
+course_dataset2 = course_dataset2[["qualifications/view" in a for a in course_dataset2['url']]]
+print(course_dataset2.head())
+
 ```
 
 
@@ -365,8 +370,10 @@ def apply_conversions(row):
         row["fee"] = read_fee(row["annualFee"])
     return row
 
-course_dataset_cleaned = course_dataset2.apply(apply_conversions, 1)
+course_dataset3 = course_dataset2.apply(apply_conversions, 1)
+
 ```
+
 
 ## bring the detailed NZSCED classification codes
 Old code, not used.
@@ -383,6 +390,7 @@ narrow_nzsced.head()
 ## Remove entries which have no useful data
 ```{python}
 data4 = course_dataset3[course_dataset3.fee.notnull() & (course_dataset3.fee != "N/A") & (course_dataset3.fee != "N/AN/A")]
+data4.columns
 data4.head()
 ```
 
@@ -397,6 +405,7 @@ def read_nzsced_set(excel_file_path):
     print(nzsced.head())
     return nzsced
 
+#note that pd.read_excel no longer supports xlsx files
 def add_nzsced_codes(import_nzsced):
     broad_nzsced = read_nzsced_set("../metadata/NZSCED_broad.xlsx")
     narrow_nzsced = read_nzsced_set("../metadata/NZSCED_narrow.xlsx")
@@ -424,8 +433,8 @@ def add_nzsced_codes(import_nzsced):
     
     return import_nzsced4
 
-import_nzsced = data4.drop(columns="Code")
-course_nzsced = add_nzsced_codes(import_nzsced)
+#import_nzsced = data4.drop(columns="Code")
+course_nzsced = add_nzsced_codes(data4)
 course_nzsced.head()
 ```
 
