@@ -279,7 +279,7 @@ f.close()
 ```
 
 ## Web scraping details from all the courses pages on the Careers NZ website
-## WARNING: this will take even longer (>hour)
+## WARNING: this will take even longer (> 2 hours)
 ```{python}
 def getCourseDetails(driver, url):
     course_details = {
@@ -323,7 +323,6 @@ print(course_dataset2.head())
 
 ```
 
-
 ## do some cleaning of the course dataset
 ```{python}
 def extract_codes_from_url(url):
@@ -338,7 +337,7 @@ def get_unit(txt):
 def get_value(txt):
     if txt == None:
         return None
-    return re.search("(\d+)(?: \w+)", txt).group(1)
+    return re.search("(\S+)(?: \w+)", txt).group(1)
 
 def calculate_durations(txt):
     if txt is None:
@@ -407,9 +406,9 @@ def read_nzsced_set(excel_file_path):
 
 #note that pd.read_excel no longer supports xlsx files
 def add_nzsced_codes(import_nzsced):
-    broad_nzsced = read_nzsced_set("../metadata/NZSCED_broad.xlsx")
-    narrow_nzsced = read_nzsced_set("../metadata/NZSCED_narrow.xlsx")
-    detailed_nzsced = read_nzsced_set("../metadata/NZSCED_detailed.xlsx")
+    broad_nzsced = read_nzsced_set("../metadata/NZSCED_broad.xls")
+    narrow_nzsced = read_nzsced_set("../metadata/NZSCED_narrow.xls")
+    detailed_nzsced = read_nzsced_set("../metadata/NZSCED_detailed.xls")
     
     import_nzsced1 = pd.merge(import_nzsced, detailed_nzsced, on="fieldOfStudy", how="left").rename(columns={"Code": "DetailedNZSCED"})
     import_nzsced2 = pd.merge(import_nzsced1, narrow_nzsced, on="fieldOfStudy", how="left").rename(columns={"Code": "NarrowNZSCED"})
@@ -436,6 +435,8 @@ def add_nzsced_codes(import_nzsced):
 #import_nzsced = data4.drop(columns="Code")
 course_nzsced = add_nzsced_codes(data4)
 course_nzsced.head()
+course_nzsced.columns
+
 ```
 
 
@@ -472,7 +473,25 @@ The means of fee and durations are the result
 ```{python}
 level_nzsced_fees = course_nzsced2.groupby(["qualLevel", "NZSCED_Narrow"]).mean()
 level_nzsced_fees.head()
+level_nzsced_fees.shape
 
+```
+
+```{python}
+
+level_nzsced_fees.loc[9, '0109'] #This seems wrong
+
+checking_bio_masters = course_nzsced2[(course_nzsced2['qualLevel'] == 9) & (course_nzsced2['NZSCED_Narrow'] == '0109')]
+course_nzsced2.columns
+
+checking_bio_masters.loc[:, checking_bio_masters.columns != 'url']
+checking_bio_masters[['NZSCED', 'NZSCED_Narrow', 'annualFee', 'duration', 'duration_yr', 'qualLevel']]
+checking_bio_masters.shape
+
+```
+
+
+```{python}
 level_nzsced_fees.to_csv("../datasets/level_nzsced_fees.csv")
 ```
 
@@ -526,26 +545,25 @@ fees_and_durations2 <- fees_and_durations %>% rename(level_code = qualLevel, fie
     ) %>%
     select(level_code, field_code, duration_yr, fee)
 head(fees_and_durations2)
+
+```
+```{r}
+filter(fees_and_durations, NZSCED_Narrow == '0109')
 ```
 
 
 
 ## calculate fees for course and likely loan balance
 Cumulative duration created which considers previous study for postgraduate qualifications
-Using median non-fee component for 2018 or $6983 (Table 4, Student Loan Scheme Annual Report 2019)
+Using median non-fee component for 2018 of $6983 (Table 4, Student Loan Scheme Annual Report 2019)
 
 ```{r}
-fees2 <- fees_and_durations2 %>% 
-    mutate(
-        cum_duration = ifelse(level_code %in% c("03", "04", "05", "07"), 
-                          duration_yr,
-                              ifelse(level_code %in% c("08", "09"), 
-                                  duration_yr + fees_and_durations2[fees_and_durations2$level_code == "07" & fees_and_durations2$field_code == field_code,]$duration_yr,
-                                  duration_yr + 
-                                     fees_and_durations2[fees_and_durations2$level_code == "07" & fees_and_durations2$field_code == field_code,"duration_yr"] +
-                                     fees_and_durations2[fees_and_durations2$level_code == "09" & fees_and_durations2$field_code == field_code,"duration_yr"]
-                              )
-                         ),
+fees_and_durations2$cum_duration = fees_and_durations2$duration_yr
+subset1 = filter(fees_and_durations2, level_code %in% c('07', '08')) %>% group_by(field_code) %>% mutate(cum_duration = cumsum(duration_yr)) %>% filter(level_code != '07')
+subset2 = filter(fees_and_durations2, !level_code %in% c('04', '05', '08')) %>% group_by(field_code) %>% mutate(cum_duration = cumsum(duration_yr))
+fees2 = rbind(subset1, subset2, filter(fees_and_durations2,  level_code %in% c('04', '05')))
+
+fees2 = mutate(fees2, 
         fee_component = fee * duration_yr,
         none_fee_component = 6983 * duration_yr 
         #$4800 ~ median living costs + CRC borrowed in 2013 (6983 in 2018)
@@ -556,6 +574,13 @@ fees2 <- fees_and_durations2 %>%
 head(fees2)
 ```
 
+
+```{r}
+#Checking
+filter(fees2, field_code == '0109')
+```
+
+
 loan_at_graduation considers loan of previous study for postgrad qualifications
 
 ```{r}
@@ -564,7 +589,8 @@ costs <- fees2 %>% mutate(
                           loan_for_course,
                               ifelse(level_code %in% c("08", "09"), 
                                   loan_for_course + fees2[fees2$level_code == "07" & fees2$field_code == field_code,]$loan_for_course,
-                                  duration_yr + 
+                                  #Else, Level 10 PhD
+                                  loan_for_course + 
                                      fees2[fees2$level_code == "07" & fees2$field_code == field_code,"loan_for_course"] +
                                      fees2[fees2$level_code == "09" & fees2$field_code == field_code,"loan_for_course"]
                               )
@@ -594,11 +620,11 @@ sac_paid <- costs %>% left_join(sac_funding2, by=c("level_code", "field_code")) 
     mutate(
         total_funding = sac_funding * duration_yr
     )
-sac_paid %>% filter(level_code == '07', field_code == '0201') %>% head(8)
+sac_paid %>% filter(level_code == '09', field_code == '1007') %>% head(8)
 ```
 
 ## Save fee, duration and funding dataset
 ```{r}
-write.csv(sac_paid, "../program_costs/fees_durations_SAC.csv", row.names = FALSE)
+write.csv(sac_paid, "../program_costs/fees_durations_SAC_NEW.csv", row.names = FALSE)
 ```
 
