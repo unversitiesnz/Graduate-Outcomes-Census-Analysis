@@ -407,9 +407,9 @@ def read_nzsced_set(excel_file_path):
 
 #note that pd.read_excel no longer supports xlsx files
 def add_nzsced_codes(import_nzsced):
-    broad_nzsced = read_nzsced_set("../metadata/NZSCED_broad.xlsx")
-    narrow_nzsced = read_nzsced_set("../metadata/NZSCED_narrow.xlsx")
-    detailed_nzsced = read_nzsced_set("../metadata/NZSCED_detailed.xlsx")
+    broad_nzsced = read_nzsced_set("../metadata/NZSCED_broad.xls")
+    narrow_nzsced = read_nzsced_set("../metadata/NZSCED_narrow.xls")
+    detailed_nzsced = read_nzsced_set("../metadata/NZSCED_detailed.xls")
     
     import_nzsced1 = pd.merge(import_nzsced, detailed_nzsced, on="fieldOfStudy", how="left").rename(columns={"Code": "DetailedNZSCED"})
     import_nzsced2 = pd.merge(import_nzsced1, narrow_nzsced, on="fieldOfStudy", how="left").rename(columns={"Code": "NarrowNZSCED"})
@@ -436,6 +436,13 @@ def add_nzsced_codes(import_nzsced):
 #import_nzsced = data4.drop(columns="Code")
 course_nzsced = add_nzsced_codes(data4)
 course_nzsced.head()
+course_nzsced.columns
+
+```
+#Looking for the 7001 PhD column/s
+```{r}
+#course_nzsced[(course_nzsced['NZSCED_Narrow']=='1007') & (course_nzsced['qualLevel']=='10')]
+
 ```
 
 
