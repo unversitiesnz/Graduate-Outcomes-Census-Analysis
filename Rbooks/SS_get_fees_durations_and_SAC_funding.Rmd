@@ -315,7 +315,7 @@ course_dataset_a.head()
 # performing post-scrape actions
 ## convert field of study from type object to string and remove any urls that aren't a qualification.
 ```{python}
-course_dataset2 = course_dataset
+course_dataset2 = course_dataset_a
 course_dataset2["fieldOfStudy"] = course_dataset2["fieldOfStudy"] .astype('str') 
 
 course_dataset2 = course_dataset2[["qualifications/view" in a for a in course_dataset2['url']]]
@@ -371,6 +371,11 @@ def apply_conversions(row):
 
 course_dataset3 = course_dataset2.apply(apply_conversions, 1)
 
+```
+
+
+```{python}
+course_dataset3.to_csv('course_dataset3.csv')
 ```
 
 
@@ -438,6 +443,9 @@ course_nzsced.head()
 course_nzsced.columns
 
 ```
+```{python}
+course_nzsced.to_csv("course_nzsced_CHECK.csv")
+```
 
 
 ## Convert the study level text to numbers
@@ -477,19 +485,6 @@ level_nzsced_fees.shape
 
 ```
 
-```{python}
-
-level_nzsced_fees.loc[9, '0109'] #This seems wrong
-
-checking_bio_masters = course_nzsced2[(course_nzsced2['qualLevel'] == 9) & (course_nzsced2['NZSCED_Narrow'] == '0109')]
-course_nzsced2.columns
-
-checking_bio_masters.loc[:, checking_bio_masters.columns != 'url']
-checking_bio_masters[['NZSCED', 'NZSCED_Narrow', 'annualFee', 'duration', 'duration_yr', 'qualLevel']]
-checking_bio_masters.shape
-
-```
-
 
 ```{python}
 level_nzsced_fees.to_csv("../datasets/level_nzsced_fees.csv")
@@ -509,7 +504,7 @@ head(fees_and_durations)
 
 fees_and_durations["qualLevel"] <- formatC(fees_and_durations$qualLevel, width = 2, flag = "0")
 fees_and_durations["NZSCED_Narrow"] <- formatC(fees_and_durations$NZSCED_Narrow, width = 4, flag = "0")
-fees_and_durations["duration_whole_yr"] <- floor(fees_and_durations$duration_yr)
+fees_and_durations["duration_whole_yr"] <- round(fees_and_durations$duration_yr)
 head(fees_and_durations)
 ```
 
@@ -547,56 +542,77 @@ fees_and_durations2 <- fees_and_durations %>% rename(level_code = qualLevel, fie
 head(fees_and_durations2)
 
 ```
-```{r}
-filter(fees_and_durations, NZSCED_Narrow == '0109')
-```
 
 
 
 ## calculate fees for course and likely loan balance
-Cumulative duration created which considers previous study for postgraduate qualifications
+Cumulative duration created which considers previous study for postgraduate qualifications 
+NB: PhD cumulative duration = Bach + Mast + PhD
 Using median non-fee component for 2018 of $6983 (Table 4, Student Loan Scheme Annual Report 2019)
 
 ```{r}
 fees_and_durations2$cum_duration = fees_and_durations2$duration_yr
+fees_and_durations2 = fees_and_durations2 %>% arrange(field_code, level_code)
+
 subset1 = filter(fees_and_durations2, level_code %in% c('07', '08')) %>% group_by(field_code) %>% mutate(cum_duration = cumsum(duration_yr)) %>% filter(level_code != '07')
 subset2 = filter(fees_and_durations2, !level_code %in% c('04', '05', '08')) %>% group_by(field_code) %>% mutate(cum_duration = cumsum(duration_yr))
 fees2 = rbind(subset1, subset2, filter(fees_and_durations2,  level_code %in% c('04', '05')))
+
+#Accounting for Honours quals that include Bachelors
+fees2[which(fees2$level_code == '08' & fees2$duration_yr >= 4),]$cum_duration = fees2[which(fees2$level_code == '08' & fees2$duration_yr >= 4),]$duration_yr
 
 fees2 = mutate(fees2, 
         fee_component = fee * duration_yr,
         none_fee_component = 6983 * duration_yr 
         #$4800 ~ median living costs + CRC borrowed in 2013 (6983 in 2018)
     ) %>% mutate(
-        duration_whole_yr = floor(cum_duration),
+        duration_whole_yr = signif(cum_duration, 1),
         loan_for_course = fee_component + none_fee_component
     )
-head(fees2)
-```
 
-
-```{r}
 #Checking
-filter(fees2, field_code == '0109')
+filter(fees2, field_code == '1007') %>% arrange(level_code) %>% View()
 ```
 
 
 loan_at_graduation considers loan of previous study for postgrad qualifications
+Need to carefully note whether Honours degrees are 1 year or 4+ years.
+
+New method below
 
 ```{r}
-costs <- fees2 %>% mutate(
-    loan_at_graduation = ifelse(level_code %in% c("03", "04", "05", "07"), 
-                          loan_for_course,
-                              ifelse(level_code %in% c("08", "09"), 
-                                  loan_for_course + fees2[fees2$level_code == "07" & fees2$field_code == field_code,]$loan_for_course,
-                                  #Else, Level 10 PhD
-                                  loan_for_course + 
-                                     fees2[fees2$level_code == "07" & fees2$field_code == field_code,"loan_for_course"] +
-                                     fees2[fees2$level_code == "09" & fees2$field_code == field_code,"loan_for_course"]
-                              )
-                         ),
-)
-head(costs)
+fees2$loan_at_graduation = fees2$loan_for_course
+
+fees2 = fees2 %>% arrange(field_code, level_code)
+
+subset1 = filter(fees2, level_code %in% c('07', '08')) %>% group_by(field_code) %>% mutate(loan_at_graduation = cumsum(loan_for_course)) %>% filter(level_code != '07')
+
+subset2 = filter(fees2, !level_code %in% c('04', '05', '08')) %>% group_by(field_code) %>% mutate(loan_at_graduation = cumsum(loan_for_course))
+
+costs = rbind(subset1, subset2, filter(fees2,  level_code %in% c('04', '05')))
+
+#Accounting for Honours quals that include Bachelors
+costs[which(costs$level_code == '08' & costs$duration_yr >= 4),]$loan_at_graduation = costs[which(costs$level_code == '08' & costs$duration_yr >= 4),]$loan_for_course
+
+#Checking
+filter(costs, field_code == '0401') %>% arrange(level_code) %>% View()
+```
+
+```{r}
+# costs <- fees2 %>% mutate(
+#     loan_at_graduation = ifelse(level_code %in% c("03", "04", "05", "07"), 
+#                           loan_for_course,
+#                               ifelse(level_code %in% c("08", "09"), 
+#                                   loan_for_course + fees2[fees2$level_code == "07" & fees2$field_code == field_code,]$loan_for_course,
+#                                   #Else, Level 10 PhD
+#                                   loan_for_course + 
+#                                      fees2[fees2$level_code == "07" & fees2$field_code == field_code,"loan_for_course"] +
+#                                      fees2[fees2$level_code == "09" & fees2$field_code == field_code,"loan_for_course"]
+#                               )
+#                          ),
+# )
+# 
+
 ```
 
 ## Merge in SAC rates
@@ -620,7 +636,7 @@ sac_paid <- costs %>% left_join(sac_funding2, by=c("level_code", "field_code")) 
     mutate(
         total_funding = sac_funding * duration_yr
     )
-sac_paid %>% filter(level_code == '09', field_code == '1007') %>% head(8)
+sac_paid %>% filter(field_code == '0607') %>% head(8)
 ```
 
 ## Save fee, duration and funding dataset
