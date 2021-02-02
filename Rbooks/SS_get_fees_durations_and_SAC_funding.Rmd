@@ -440,11 +440,6 @@ def add_nzsced_codes(import_nzsced):
 #import_nzsced = data4.drop(columns="Code")
 course_nzsced = add_nzsced_codes(data4)
 course_nzsced.head()
-course_nzsced.columns
-
-```
-```{python}
-course_nzsced.to_csv("course_nzsced_CHECK.csv")
 ```
 
 
