@@ -205,15 +205,15 @@ library(tidyverse)
 
 ```{r}
 
-damien_2018_costs <- read_excel("../program_costs/Damien Fee and Duration Tables 2018_4_DW.xlsx", 
+damien_costs <- read_excel("../program_costs/Damien Fee and Duration Tables 2013.xlsx", 
                                                                range = "C3:I81", na = "n/a")
-costs_long <- pivot_longer(damien_2018_costs, cols = c('4':'10'), names_to = 'qualLevel', values_to = 'fee')
+costs_long <- pivot_longer(damien_costs, cols = c('4':'10'), names_to = 'qualLevel', values_to = 'fee')
 names(costs_long)[1] <- "NZSCED_Narrow"
 costs_long$fee = costs_long$fee - 5000 #Removing previous (2013) living cost + CRC amount that has been included early in the figures
 
-damien_2018_durations <- read_excel("~/UNZ/Census work/Copy of Damien Fee and Duration Tables 2018_4_DW.xlsx", 
+damien_durations <- read_excel("~/UNZ/Census work/Copy of Damien Fee and Duration Tables 2018_4_DW.xlsx", 
                                 range = "J3:P81", na = "n/a")
-durations_long <- pivot_longer(damien_2018_durations, cols = c('4':'10'), names_to = 'qualLevel', values_to = 'duration_yr')
+durations_long <- pivot_longer(damien_durations, cols = c('4':'10'), names_to = 'qualLevel', values_to = 'duration_yr')
 names(durations_long)[1] <- "NZSCED_Narrow"
 
 #Don't need loan at graduation data as this is calculated later (using 2018 non-fees amount)
@@ -222,7 +222,7 @@ full <- left_join(costs_long, durations_long, by = c("NZSCED_Narrow", "qualLevel
 
 #full <- left_join(full, loans_at_grad_long, by = c("NZSCED_Narrow", "qualLevel"))
 
-write.csv(full, "level_nzsced_fees_updated.csv", row.names = FALSE)
+write.csv(full, "../datasets/level_nzsced_fees_updated.csv", row.names = FALSE)
 
 ```
 
@@ -281,6 +281,8 @@ NB: PhD cumulative duration = Bach + Mast + PhD
 Using median non-fee component for 2018 of $6983 (Table 4, Student Loan Scheme Annual Report 2019)
 
 ```{r}
+print
+
 fees_and_durations2$cum_duration = fees_and_durations2$duration_yr
 fees_and_durations2 = fees_and_durations2 %>% arrange(field_code, level_code)
 
@@ -293,7 +295,7 @@ fees2[which(fees2$level_code == '08' & fees2$duration_yr >= 4),]$cum_duration = 
 
 fees2 = mutate(fees2, 
         fee_component = fee * duration_yr,
-        none_fee_component = 6983 * duration_yr 
+        none_fee_component = 5000 * duration_yr 
         #$4800 ~ median living costs + CRC borrowed in 2013 (6983 in 2018)
     ) %>% mutate(
         duration_whole_yr = signif(cum_duration, 1),
@@ -325,7 +327,7 @@ costs = rbind(subset1, subset2, filter(fees2,  level_code %in% c('04', '05')))
 costs[which(costs$level_code == '08' & costs$duration_yr >= 4),]$loan_at_graduation = costs[which(costs$level_code == '08' & costs$duration_yr >= 4),]$loan_for_course
 
 #Checking
-filter(costs, field_code == '0607') %>% arrange(level_code) %>% View()
+filter(costs, field_code == '1007') %>% arrange(level_code) %>% View()
 ```
 
 ```{r}
