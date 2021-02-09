@@ -114,6 +114,9 @@ simplistic_lifetime_earnings %>%
     output_field_levels_all(con = go_analysis_con, value_var = "simple_lifetime_income", table_name = "cen_lifetime_earnings_a")
 ```
 
+```{r}
+filter(simplistic_lifetime_earnings, employed_code==1, level_code == '00')
+```
 
 
 # ******************************************************* 
@@ -125,7 +128,7 @@ simplistic_lifetime_earnings %>%
 # Get fee estimates
 
 ```{r}
-fees_and_funding <- read.csv("../program_costs/fees_durations_SAC.csv") %>% mutate(
+fees_and_funding <- read.csv("../program_costs/fees_durations_SAC_NEW.csv") %>% mutate(
   level_code = formatC(level_code, width = 2, flag = "0"),
   field_code = formatC(field_code, width = 4, flag = "0")
   
@@ -190,6 +193,12 @@ baseline_income <- tax_calculated %>%
     rename(baseline_income = gross_income, baseline_tax = tax)
 head(baseline_income)
 ```
+
+Calculating lifetime earnings for school leavers, for reference
+```{r}
+baseline_income %>% group_by(employed_code) %>% summarise(lifetime_earnings = sum(baseline_income))
+```
+
 
 Calculating difference in earnings and tax for each qual from baseline
 ```{r}

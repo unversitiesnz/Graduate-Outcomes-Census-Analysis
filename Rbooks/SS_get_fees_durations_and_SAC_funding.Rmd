@@ -1,8 +1,9 @@
 ---
-title: "Screen Scrape Fees, Durations and SAC funding"
+title: "Get program fees, durations, and SAC funding"
 output: html_notebook
 ---
-This code screen-scrapes the TEC and Careers websites
+This code screen-scrapes the TEC for SAC funding and references an Excel spreadsheet for course costs (which itself uses SAC funding rates in the calculations - this could possible be streamlined to avoid manual updating of the spreadsheet).
+Previously this script also screen-scraped the Careers NZ website for course fees and durations - this method has been discontinued due to issues in reconciling qualifications with subjects - it meant that only qualifications that referred to a specific subject would be considered in estimating the costs and durations for that subject (excluding, e.g., BSc for Maths students).
 
 ```{r}
 library(reticulate)
@@ -190,311 +191,45 @@ nzsced_sac_rates.head()
 nzsced_sac_rates.to_csv("../program_costs/NZSCED_SAC_rates.csv")
 ```
 
-# ********************************************************
-# CAREERS NZ SCREEN SCRAPING of fees and durations
-# ********************************************************
-
-Screen must be wide enough for this to work, full desktop view.
-
-Starting new instance of Chrome driver incase it got confused after the above section.
-```{python}
-driver = webdriver.Chrome()
-driver.get("https://www.careers.govt.nz/searchresults?tab=courses")
-```
-
-
-## define functions to do the screen scraping
-```{python}
-# returns true if there was a page to navigate to, false otherwise.
-def navigate_to_next_page(driver):    
-    next_button = driver.find_element_by_class_name("next")
-    if next_button.get_attribute("href") == "javascript:;":
-        # at the end!
-        print("Done")
-        return False
-    else:
-        # click next!
-        next_button.click()
-        return True
-        
-def getValue(driver, selector):
-    try:
-        return driver.find_element_by_css_selector(selector).text
-    except:
-        return None
-def getFeeValue(driver, selector):
-    value = getValue(driver, selector)
-    if value is not None:
-        return value.replace("\nTooltip","")
-    else:
-        return value
-        
-def get_course_links_from_page(driver):
-    def get_link(element):
-        return element.get_attribute("href")
-    page_links = driver.find_elements_by_css_selector('.course-provider a')
-    course_pages = list(map(get_link,page_links))
-    return course_pages
-get_course_links_from_page(driver)
-
-
-# returns true there was a page to navigate to, false otherwise.
-def navigate_to_next_page(driver):    
-    next_button = driver.find_element_by_class_name("next")
-    if next_button.get_attribute("href") == "javascript:;":
-        # at the end!
-        print("Done")
-        return False
-    else:
-        # click next!
-        next_button.click()
-        return True
-
-```
-
-# Running the web scraping
-Webscraping can take time, during the process a screen of chrome will run itself and navigate through pages on the Careers NZ website.
-It does not need to be kept in focus, nor does it need to use your mouse pointer (some other automation tools do). Just don't click on any links while it is running and it should hopefully work.
-
-## Web scraping all links to courses on the Careers NZ site
-## WARNING: this will take a while
-```{python}
-driver.get("https://www.careers.govt.nz/searchresults?tab=courses")
-course_pages = get_course_links_from_page(driver)
-
-while (navigate_to_next_page(driver)):
-    course_pages.extend(get_course_links_from_page(driver))
-    
-f= open("../datasets/course_pages.pickle","wb")
-
-pickle.dump(course_pages, f)
-f.close()
-```
-
-```{python}
-f= open("../datasets/course_pages.pickle","rb")
-
-course_pages = pickle.load(f)
-f.close()
-```
-
-## Web scraping details from all the courses pages on the Careers NZ website
-## WARNING: this will take even longer (> 2 hours)
-```{python}
-def getCourseDetails(driver, url):
-    course_details = {
-        "url": url,
-        "qualName": getValue(driver, "h1.details-title"),
-        "providerName": getValue(driver, "h2.details-subtitle"),
-        "qualLevel": getValue(driver, ".qualification a"),
-        "fieldOfStudy": getValue(driver, ".subject-area p"),
-        "duration": getValue(driver, ".length-of-course .decimal-spacing"),
-        "annualFee": getFeeValue(driver, '#student-fee .student-fees td[data-label="Annual"]'),
-        "govtSubsidy": getFeeValue(driver, 'th.government-subsidy + td')
-    }
-    
-    return course_details
-course_dataset = pd.DataFrame(columns=["url", "qualName", "providerName", "qualLevel", "fieldOfStudy", "duration", "annualFee", "govtSubsidy"])
-for link in course_pages:
-    driver.get(link + "?hello=from_unz&screen_scape")
-    course_dataset = course_dataset.append(getCourseDetails(driver, link), ignore_index=True)
-    
-f= open("../datasets/course_dataset.pickle","wb")
-pickle.dump(course_dataset, f)
-f.close()
-```
-
-```{python}
-f= open("../datasets/course_dataset.pickle","rb")
-
-course_dataset_a = pickle.load(f)
-f.close()
-course_dataset_a.head()
-```
-
-# performing post-scrape actions
-## convert field of study from type object to string and remove any urls that aren't a qualification.
-```{python}
-course_dataset2 = course_dataset_a
-course_dataset2["fieldOfStudy"] = course_dataset2["fieldOfStudy"] .astype('str') 
-
-course_dataset2 = course_dataset2[["qualifications/view" in a for a in course_dataset2['url']]]
-print(course_dataset2.head())
-
-```
-
-## do some cleaning of the course dataset
-```{python}
-def extract_codes_from_url(url):
-    codes = re.search("(?:view\/)(\w+)(?:\/)(\d\d\d\d)$",url)
-    return {"qualCode": codes.group(1), "provCode": codes.group(2)}
-
-def get_unit(txt):
-    if txt == None:
-        return None
-    return re.search("(?:\d+ )(\w+)", txt).group(1)
-
-def get_value(txt):
-    if txt == None:
-        return None
-    return re.search("(\S+)(?: \w+)", txt).group(1)
-
-def calculate_durations(txt):
-    if txt is None:
-        return None
-    
-    v = float(get_value(txt))
-    u = get_unit(txt)
-    if u == "Weeks":
-        d1 = v / 40
-        return round(d1 * 2) / 2 # rounded to the nearest half year
-    else:
-        return v
-        
-def read_fee(txt):
-    if txt is None:
-        return None
-    elif txt == "N/A":
-        return txt
-    else:
-        return int(re.sub("[\$,]", "",str(txt)))
-def apply_conversions(row):
-    row["duration_yr"] = calculate_durations(row["duration"])
-    codes = extract_codes_from_url(row["url"])
-    row["qualCode"] = codes["qualCode"]
-    row["provCode"] = codes["provCode"]
-    if row["duration_yr"] == 0.5:
-        row["fee"] = read_fee(row["annualFee"]) * 2
-    else:
-        row["fee"] = read_fee(row["annualFee"])
-    return row
-
-course_dataset3 = course_dataset2.apply(apply_conversions, 1)
-
-```
-
-
-```{python}
-course_dataset3.to_csv('course_dataset3.csv')
-```
-
-
-## bring the detailed NZSCED classification codes
-Old code, not used.
-
-detailed_nzsced = pd.read_excel("../metadata/NZSCED_detailed.xlsx", skiprows=8, dtype = {"Code": str, "Descriptor": str}).rename(columns={"Descriptor":"fieldOfStudy"})
-detailed_nzsced["fieldOfStudy"] = detailed_nzsced.fieldOfStudy.apply(lambda x: re.sub("(\s\s+)", " ", x))
-detailed_nzsced.head()
-
-narrow_nzsced = pd.read_excel("../metadata/NZSCED_narrow.xlsx", skiprows=8, dtype = {"Code": str, "Descriptor": str}).rename(columns={"Descriptor":"fieldOfStudy"})
-narrow_nzsced["fieldOfStudy"] = narrow_nzsced.fieldOfStudy.apply(lambda x: re.sub("(\s\s+)", " ", x))
-narrow_nzsced.head()
-
-
-## Remove entries which have no useful data
-```{python}
-data4 = course_dataset3[course_dataset3.fee.notnull() & (course_dataset3.fee != "N/A") & (course_dataset3.fee != "N/AN/A")]
-data4.columns
-data4.head()
-```
-
-
-## Get the NZSCED classification codes
-
-This attempts to match the titles with all classification levels. Starting with detailed and working up to broad. 
-```{python}
-def read_nzsced_set(excel_file_path):
-    nzsced = pd.read_excel(excel_file_path, skiprows=8, dtype = {"Code": str, "Descriptor": str}).rename(columns={"Descriptor":"fieldOfStudy"})
-    nzsced["fieldOfStudy"] = nzsced.fieldOfStudy.apply(lambda x: re.sub("(\s\s+)", " ", x))
-    print(nzsced.head())
-    return nzsced
-
-#note that pd.read_excel no longer supports xlsx files
-def add_nzsced_codes(import_nzsced):
-    broad_nzsced = read_nzsced_set("../metadata/NZSCED_broad.xls")
-    narrow_nzsced = read_nzsced_set("../metadata/NZSCED_narrow.xls")
-    detailed_nzsced = read_nzsced_set("../metadata/NZSCED_detailed.xls")
-    
-    import_nzsced1 = pd.merge(import_nzsced, detailed_nzsced, on="fieldOfStudy", how="left").rename(columns={"Code": "DetailedNZSCED"})
-    import_nzsced2 = pd.merge(import_nzsced1, narrow_nzsced, on="fieldOfStudy", how="left").rename(columns={"Code": "NarrowNZSCED"})
-    import_nzsced3 = pd.merge(import_nzsced2, broad_nzsced, on="fieldOfStudy", how="left").rename(columns={"Code": "BroadNZSCED"})
-    
-    def choose_nzsced_level(row):
-        if pd.notnull(row["DetailedNZSCED"]):
-            row["NZSCED"] = row["DetailedNZSCED"]
-            row["NZSCED_Level"] = 3
-            row["NZSCED_Narrow"] = row["DetailedNZSCED"][0:4]
-        elif pd.notnull(row["NarrowNZSCED"]):
-            row["NZSCED"] = row["NarrowNZSCED"]
-            row["NZSCED_Level"] = 2
-            row["NZSCED_Narrow"] = row["NarrowNZSCED"]
-        elif pd.notnull(row["BroadNZSCED"]):
-            row["NZSCED"] = row["BroadNZSCED"]
-            row["NZSCED_Level"] = 1
-        return row
-    
-    import_nzsced4 = import_nzsced3.apply(choose_nzsced_level, 1).drop(columns=["DetailedNZSCED", "NarrowNZSCED", "BroadNZSCED"])
-    
-    return import_nzsced4
-
-#import_nzsced = data4.drop(columns="Code")
-course_nzsced = add_nzsced_codes(data4)
-course_nzsced.head()
-```
-
-
-## Convert the study level text to numbers
-NOTE LEVEL 5 AND 6 DIPLOMAS CATEGORISED AS LEVEL 5
-```{python}
-levels_of_interest = ["Certificate Level 3", "Diploma Level 5", "Diploma Level 6", "Bachelor Degree Level 7", "Bachelor Degree with Honours Level 8", "Masters Degree Level 9", "Doctorate Level 10"]
-levels_of_interest
-
-def convert_qual_level(level):
-    if level == 'Certificate Level 3':
-        return 3
-    elif level == 'Diploma Level 5' or level == 'Diploma Level 6':
-        return 5
-    elif level == 'Bachelor Degree Level 7':
-        return 7
-    elif level == 'Bachelor Degree with Honours Level 8':
-        return 8
-    elif level == 'Masters Degree Level 9':
-        return 9
-    elif level == 'Doctorate Level 10':
-        return 10
-    else:
-        raise ValueError("This level was not expected {}".format(level))
-course_nzsced2 = course_nzsced[course_nzsced.qualLevel.isin(levels_of_interest)].copy()
-course_nzsced2["qualLevel"] = course_nzsced2.qualLevel.apply(convert_qual_level)
-course_nzsced2.head()
-set(course_nzsced.qualLevel)
-```
-
-## Group by study level and field of study
-We do this because we want fees for each field and level of study, whereas the Careers website only has fees by institution and broad field.
-The means of fee and durations are the result
-```{python}
-level_nzsced_fees = course_nzsced2.groupby(["qualLevel", "NZSCED_Narrow"]).mean()
-level_nzsced_fees.head()
-level_nzsced_fees.shape
-
-```
-
-
-```{python}
-level_nzsced_fees.to_csv("../datasets/level_nzsced_fees.csv")
-```
 
 # ***********************************************
-# R section: finalise and do some filling of the gaps in the fees and durations, then merge with SAC funding rates
+# R section: get fees and durations from spreadsheet, do some filling of the gaps, then merge with SAC funding rates
 # ***********************************************
+
 
 ```{r}
 library(tidyverse)
 ```
 
+# Converting updated Damien Fees spreadsheet to format of fees_and_durations spreadsheet
+
 ```{r}
-fees_and_durations <- read.csv("../datasets/level_nzsced_fees.csv")
+
+damien_2018_costs <- read_excel("../program_costs/Damien Fee and Duration Tables 2018_4_DW.xlsx", 
+                                                               range = "C3:I81", na = "n/a")
+costs_long <- pivot_longer(damien_2018_costs, cols = c('4':'10'), names_to = 'qualLevel', values_to = 'fee')
+names(costs_long)[1] <- "NZSCED_Narrow"
+costs_long$fee = costs_long$fee - 5000 #Removing previous (2013) living cost + CRC amount that has been included early in the figures
+
+damien_2018_durations <- read_excel("~/UNZ/Census work/Copy of Damien Fee and Duration Tables 2018_4_DW.xlsx", 
+                                range = "J3:P81", na = "n/a")
+durations_long <- pivot_longer(damien_2018_durations, cols = c('4':'10'), names_to = 'qualLevel', values_to = 'duration_yr')
+names(durations_long)[1] <- "NZSCED_Narrow"
+
+#Don't need loan at graduation data as this is calculated later (using 2018 non-fees amount)
+
+full <- left_join(costs_long, durations_long, by = c("NZSCED_Narrow", "qualLevel"))
+
+#full <- left_join(full, loans_at_grad_long, by = c("NZSCED_Narrow", "qualLevel"))
+
+write.csv(full, "level_nzsced_fees_updated.csv", row.names = FALSE)
+
+```
+
+
+
+```{r}
+fees_and_durations <- read.csv("../datasets/level_nzsced_fees_updated.csv")
 head(fees_and_durations)
 
 fees_and_durations["qualLevel"] <- formatC(fees_and_durations$qualLevel, width = 2, flag = "0")
@@ -590,7 +325,7 @@ costs = rbind(subset1, subset2, filter(fees2,  level_code %in% c('04', '05')))
 costs[which(costs$level_code == '08' & costs$duration_yr >= 4),]$loan_at_graduation = costs[which(costs$level_code == '08' & costs$duration_yr >= 4),]$loan_for_course
 
 #Checking
-filter(costs, field_code == '0401') %>% arrange(level_code) %>% View()
+filter(costs, field_code == '0607') %>% arrange(level_code) %>% View()
 ```
 
 ```{r}

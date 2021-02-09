@@ -120,7 +120,7 @@ Write the table before any transformations are done.
 dbWriteTable(go_analysis_con, Id(schema = "lng", table = "cen_income_bands"), cen_income_bands, overwrite = TRUE)
 ```
 
-We take the sum of the product of each count and income band midpoint and then divide by the number of people to ge the mean income. 
+We take the sum of the product of each count and income band midpoint and then divide by the number of people to get the mean income. 
 We do this for two distinct populations:
 'Restricted' counts and incomes exclude those who earned \$25,000 a year or less. Counts and incomes with suffix '2' exclude those who earned no income or made a loss. We only use restricted income to create a new employment status - those who earned \$25,000 a year or more and were employed full-time.
 
